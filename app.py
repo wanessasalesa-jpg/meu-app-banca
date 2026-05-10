@@ -1,52 +1,93 @@
 import streamlit as st
-import pandas as pd
 
-# Configuração da página
-st.set_page_config(page_title="Avaliação de TCC", layout="centered")
+st.set_page_config(page_title="Avaliação Acadêmica Afya", layout="wide")
 
-st.title("🎓 Sistema de Avaliação de TCC")
-st.subheader("Painel do Avaliador")
+st.title("📋 Sistema Digital de Avaliação de Bancas")
+st.info("Unidade: Marabá - PA")
 
-# 1. Cadastro do Trabalho
-with st.expander("1. Informações do Trabalho"):
-    nome_aluno = st.text_input("Nome do Aluno")
-    titulo_tcc = st.text_input("Título do Trabalho")
-    orientador = st.text_input("Professor Orientador")
+# --- SELEÇÃO DA TURMA ---
+turma = st.selectbox("Selecione o Módulo/Turma:", 
+                     ["TCC I", "TCC II", "MCM IV (Projeto)", "MCM V (Final)"])
 
-# 2. Critérios de Avaliação
-st.write("### 📝 Notas (0 a 10)")
-col1, col2 = st.columns(2)
+# --- CADASTRO DINÂMICO DE ALUNOS ---
+st.subheader("👥 Identificação do Grupo")
+titulo_trabalho = st.text_input("Título do Trabalho")
+orientador = st.text_input("Professor(a) Orientador(a)")
 
-with col1:
-    nota_escrita = st.slider("Qualidade da Escrita/ABNT", 0.0, 10.0, 5.0)
-    nota_metodologia = st.slider("Rigor Metodológico", 0.0, 10.0, 5.0)
+# Ajusta limite de alunos conforme a turma
+limite_alunos = 5 if "MCM" in turma else 3
+num_alunos = st.number_input("Quantidade de alunos no grupo:", min_value=1, max_value=limite_alunos, value=1)
 
-with col2:
-    nota_apresentacao = st.slider("Domínio do Conteúdo (Oral)", 0.0, 10.0, 5.0)
-    nota_inovacao = st.slider("Originalidade/Inovação", 0.0, 10.0, 5.0)
+nomes_alunos = []
+for i in range(int(num_alunos)):
+    nome = st.text_input(f"Nome do Acadêmico {i+1}")
+    nomes_alunos.append(nome)
 
-comentarios = st.text_area("Comentários e Observações")
-
-# 3. Cálculos
-media_final = (nota_escrita + nota_metodologia + nota_apresentacao + nota_inovacao) / 4
-
-# 4. Resultado Final
 st.divider()
-st.write(f"### Média Final: **{media_final:.2f}**")
 
-if media_final >= 7.0:
-    st.success("✅ APROVADO")
-else:
-    st.error("❌ REPROVADO / REVISÃO")
+# --- FORMULÁRIO DE NOTAS BASEADO NA RUBRICA ---
+st.subheader(f"📝 Rubrica de Avaliação: {turma}")
+notas = {}
 
-# Botão para simular salvamento
-if st.button("Gerar Resumo da Avaliação"):
-    resumo = {
-        "Aluno": [nome_aluno],
-        "TCC": [titulo_tcc],
-        "Média": [media_final],
-        "Status": ["Aprovado" if media_final >= 7.0 else "Reprovado"]
-    }
-    df = pd.DataFrame(resumo)
-    st.table(df)
-    st.info("Dica: Você pode copiar esses dados para uma planilha!")
+if turma in ["TCC I", "TCC II"]:
+    st.write("Critérios (Sim = 100%, Parcial = 50%, Não = 0%)")
+    # Exemplo de itens da sua rubrica de TCC
+    itens = ["Tema e Contemporaneidade", "Resumo e Descritores", "Introdução/Justificativa", 
+             "Metodologia", "Referências", "Apresentação Oral", "Coerência e Qualidade", "Tempo"]
+    
+    # Pesos específicos conforme documento [cite: 1, 2]
+    pesos = [3, 1, 5, 10, 1, 10, 10, 20] # Simplificado para soma 60
+    
+    for item in itens:
+        notas[item] = st.select_slider(f"Nota para: {item}", options=[0.0, 0.5, 1.0]) # Multiplicador
+
+    total = sum([n * p for n, p in zip(notas.values(), pesos)])
+    max_pontos = 60
+
+elif turma == "MCM IV (Projeto)":
+    # Itens específicos da rubrica MCM IV 
+    itens_mcm4 = ["Domínio do conteúdo", "Coerência com o tema", "Habilidades de comunicação", 
+                  "Organização/Tempo", "Recursos audiovisuais", "Adequação objetivos/métodos"]
+    
+    for item in itens_mcm4:
+        notas[item] = st.radio(f"{item}:", [5, 3, 0], horizontal=True, help="5: Pleno, 3: Parcial, 0: Não atende")
+    
+    total = sum(notas.values())
+    max_pontos = 30
+
+elif turma == "MCM V (Final)":
+    # Itens específicos da rubrica MCM V 
+    notas["Resumo"] = st.slider("Resumo (0-10)", 0, 10)
+    notas["Introdução"] = st.slider("Introdução (0-10)", 0, 10)
+    notas["Metodologia"] = st.slider("Metodologia (0-10)", 0, 10)
+    notas["Resultados"] = st.slider("Resultados e Análise (0-20)", 0, 20)
+    notas["Discussão"] = st.slider("Discussão (0-10)", 0, 10)
+    notas["Conclusão"] = st.slider("Conclusão (0-10)", 0, 10)
+    notas["Redação/ABNT"] = st.slider("Redação/ABNT (0-10)", 0, 10)
+    notas["Arguição"] = st.slider("Arguição (0-10)", 0, 10)
+    notas["Apresentação"] = st.slider("Apresentação Visual/Oral (0-10)", 0, 10)
+    
+    total = sum(notas.values())
+    max_pontos = 100
+
+# --- RESULTADO FINAL ---
+st.divider()
+col_result, col_status = st.columns(2)
+
+with col_result:
+    st.metric("Nota Final da Banca", f"{total:.2f} / {max_pontos}")
+
+with col_status:
+    percentual = (total / max_pontos) * 100
+    if percentual >= 70:
+        st.success("SITUAÇÃO: APROVADO")
+    else:
+        st.warning("SITUAÇÃO: REVISÃO / REPROVADO")
+
+if st.button("Finalizar e Gerar Comprovante"):
+    st.balloons()
+    st.write("### Resumo para Assinatura:")
+    st.write(f"**Trabalho:** {titulo_trabalho}")
+    st.write(f"**Grupo:** {', '.join(nomes_alunos)}")
+    st.write(f"**Nota:** {total}")
+    st.write(f"Marabá, 2026")
