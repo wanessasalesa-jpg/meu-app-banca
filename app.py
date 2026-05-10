@@ -8,81 +8,111 @@ st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 try:
-   df_escalacao = conn.read()
+    # Lê a primeira aba da planilha
+    df_escalacao = conn.read()
 except:
-    st.error("Erro ao ler a aba 'Escalacao'. Verifique o nome na sua planilha.")
+    st.error("Erro ao ler a planilha. Verifique os Secrets e se o compartilhamento está como 'Qualquer pessoa com o link'.")
     st.stop()
 
 st.title("🎓 Portal de Avaliação - Afya Marabá")
 
-# 1. IDENTIFICAÇÃO DO AVALIADOR
-professores = sorted(df_escalacao["Avaliador"].unique())
+# 1. IDENTIFICAÇÃO DO AVALIADOR (Pega a 1ª coluna)
+professores = sorted(df_escalacao.iloc[:, 0].unique())
 professor_logado = st.selectbox("Selecione seu nome:", [""] + list(professores))
 
 if professor_logado:
-    # Filtra apenas os grupos deste professor
-    meus_grupos = df_escalacao[df_escalacao["Avaliador"] == professor_logado]
-    
+    # Filtra os grupos do professor selecionado
+    meus_grupos = df_escalacao[df_escalacao.iloc[:, 0] == professor_logado]
     st.write(f"### Olá, Prof. {professor_logado}!")
-    st.write(f"Você tem **{len(meus_grupos)}** bancas agendadas.")
-
-    # 2. SELEÇÃO DO GRUPO
-    trabalho_selecionado = st.selectbox("Selecione o trabalho para avaliar:", 
-                                        [""] + meus_grupos["Título"].tolist())
+    
+    # Seleção do Trabalho (Pega a 5ª coluna - Título)
+    trabalho_selecionado = st.selectbox("Selecione o trabalho para avaliar:", [""] + meus_grupos.iloc[:, 4].tolist())
 
     if trabalho_selecionado:
-        dados = meus_grupos[meus_grupos["Título"] == trabalho_selecionado].iloc[0]
+        dados = meus_grupos[meus_grupos.iloc[:, 4] == trabalho_selecionado].iloc[0]
         
-        # CABEÇALHO COM RECONHECIMENTO DO ORIENTADOR
-        st.success(f"📌 **Orientador(a):** {dados['Orientador']}")
+        # Exibe o Orientador (2ª coluna)
+        st.success(f"📌 **Orientador(a):** {dados.iloc[1]}")
         with st.expander("Ver Detalhes do Grupo"):
-            st.write(f"**Turma:** {dados['Turma']}")
-            st.write(f"**Acadêmicos:** {dados['Alunos']}")
-            st.write(f"**Horário:** {dados['Horário']}")
+            st.write(f"**Turma:** {dados.iloc[2]}")
+            st.write(f"**Acadêmicos:** {dados.iloc[3]}")
 
         st.divider()
-        turma = dados['Turma']
+        turma = str(dados.iloc[2]) # Pega a Turma (3ª coluna)
         notas = {}
 
-        # --- LÓGICA DE RUBRICAS (BASEADO NOS SEUS DOCS) ---
-        
-        # --- LÓGICA DE RUBRICAS COM DESCRIÇÕES DETALHADAS ---
-        
-        # --- LÓGICA DE RUBRICAS COM REGRAS DE TEMPO DIFERENCIADAS ---
-        
-        if turma == "TCC I":
-            st.info("Rubrica TCC I (60 pts)")
-            ajuda_tcc1 = {
-                "Tema": "Escolha de tema contemporâneo e oportuno.",
-                "Metodologia": "Define tipo de estudo, local, amostra e ética.",
-                "Tempo": "Observância do tempo: a apresentação deve durar entre 10-15 minutos."
+        # --- RUBRICA TCC I ---
+        if "TCC I" in turma and "TCC II" not in turma:
+            st.info("Rubrica TCC I (Máx: 60 pontos)")
+            itens = {
+                "Tema Contemporâneo": (3.0, "Escolha de tema contemporâneo, oportuno e de interesse."),
+                "Resumo": (1.0, "Autoexplicativo, objetivos e conclusão condizentes, palavras-chaves DECS."),
+                "Introdução": (5.0, "Clareza, concisão, justificativa e sequência lógica."),
+                "Justificativa/Problema": (5.0, "Formatação ABNT e conteúdo de justificativa/hipóteses."),
+                "Objetivos": (5.0, "Claros e exequíveis."),
+                "Metodologia": (10.0, "Tipo de estudo, local, amostra, procedimentos e ética."),
+                "Referências": (1.0, "Fontes confiáveis e listadas."),
+                "Apresentação Oral": (10.0, "Segurança, postura e domínio."),
+                "Coerência": (10.0, "Conteúdo oral coerente com o texto."),
+                "Qualidade Visual": (9.0, "Material de apoio estruturado."),
+                "Tempo": (1.0, "Duração permitida: entre 10 e 15 minutos.")
             }
-            # ... (demais itens seguem a mesma lógica)
-            notas["Tempo"] = st.slider("Tempo (Máx: 1)", 0.0, 1.0, step=0.1, help=ajuda_tcc1["Tempo"])
+            for k, (p, h) in itens.items():
+                notas[k] = st.slider(f"{k} (Máx: {p})", 0.0, p, step=0.1, help=h)
 
-        elif turma == "TCC II":
-            st.info("Rubrica TCC II (60 pts)")
-            ajuda_tcc2 = {
-                "Tempo": "Observância do tempo: a apresentação deve durar entre 15-20 minutos."
+        # --- RUBRICA TCC II ---
+        elif "TCC II" in turma:
+            st.info("Rubrica TCC II (Máx: 60 pontos)")
+            itens = {
+                "Tema e Resumo": (4.0, "Tema contemporâneo e resumo com DECS."),
+                "Introdução": (5.0, "Clareza, concisão e objetivo claro."),
+                "Metodologia": (5.0, "Rigor metodológico e descrição ética."),
+                "Resultados": (5.0, "Responde ao objetivo, estruturado e isento de opiniões."),
+                "Discussão e Conclusão": (10.0, "Interpretação, comparação crítica e limitações."),
+                "Referências": (1.0, "Fontes confiáveis e relevantes."),
+                "Apresentação Oral": (10.0, "Segurança, postura e domínio."),
+                "Coerência": (10.0, "Coerência entre fala e documento."),
+                "Qualidade Visual": (9.0, "Material estruturado e coerente."),
+                "Tempo": (1.0, "Duração permitida: entre 15 e 20 minutos.")
             }
-            notas["Tempo"] = st.slider("Tempo (Máx: 1)", 0.0, 1.0, step=0.1, help=ajuda_tcc2["Tempo"])
+            for k, (p, h) in itens.items():
+                notas[k] = st.slider(f"{k} (Máx: {p})", 0.0, p, step=0.1, help=h)
 
-        elif turma == "MCM IV":
-            st.info("Rubrica MCM IV (30 pts)")
-            # Aqui para o MCM IV, o tempo faz parte do item "Organização"
-            ajuda_mcm4 = "Organização da apresentação e gestão do tempo (Duração: 10-15 minutos)."
-            notas["Organização"] = st.slider("Organização/Tempo (Máx: 5)", 0.0, 5.0, step=0.1, help=ajuda_mcm4)
+        # --- RUBRICA MCM IV ---
+        elif "MCM IV" in turma:
+            st.info("Rubrica MCM IV (Máx: 30 pontos)")
+            crit = {
+                "Domínio de Conteúdo": (5.0, "Domínio e resposta aos questionamentos da banca."),
+                "Coerência": (5.0, "Coerência com o tema abordado."),
+                "Comunicação": (5.0, "Habilidades de comunicação e postura."),
+                "Organização e Tempo": (5.0, "Gestão da apresentação. Duração: 10-15 minutos."),
+                "Recursos Visuais": (5.0, "Uso de audiovisuais."),
+                "Adequação Métodos": (5.0, "Objetivos adequados aos métodos.")
+            }
+            for k, (p, h) in crit.items():
+                notas[k] = st.slider(f"{k} (Máx: {p})", 0.0, p, step=0.1, help=h)
 
-        elif turma == "MCM V":
-            st.info("Rubrica MCM V (100 pts)")
-            ajuda_mcm5 = "Clareza, segurança e tempo de apresentação (Duração: 15-20 minutos)."
-            notas["Apresentação"] = st.slider("Apresentação (Máx: 10)", 0.0, 10.0, step=0.1, help=ajuda_mcm5)
+        # --- RUBRICA MCM V ---
+        elif "MCM V" in turma:
+            st.info("Rubrica MCM V (Máx: 100 pontos)")
+            itens_m5 = {
+                "Resumo": (10.0, "Objetivos, métodos, resultados e conclusões presentes?"),
+                "Introdução": (10.0, "Tema embasado e objetivos claros?"),
+                "Metodologia": (10.0, "Metodologia atende aos objetivos?"),
+                "Resultados": (20.0, "Descritos e analisados de forma suficiente?"),
+                "Discussão": (10.0, "Embasada em artigos atualizados?"),
+                "Conclusão": (10.0, "Coerente com os objetivos e resultados?"),
+                "Redação/ABNT": (10.0, "Gramática e formatação ABNT/Vancouver."),
+                "Arguição": (10.0, "Capacidade de responder à banca."),
+                "Apresentação/Tempo": (10.0, "Clareza e segurança. Duração: 15-20 minutos.")
+            }
+            for k, (p, h) in itens_m5.items():
+                notas[k] = st.slider(f"{k} (Máx: {p})", 0.0, p, step=0.1, help=h)
 
-        # CÁLCULO FINAL
-        total_banca = sum(notas.values())
-        st.subheader(f"Nota Final: {total_banca:.2f}")
-
-        if st.button("Confirmar e Salvar Avaliação"):
-            # Aqui você conectará a função de salvar na planilha
+        # --- CÁLCULO FINAL ---
+        total = sum(notas.values())
+        st.subheader(f"Nota Final: {total:.2f}")
+        
+        if st.button("Confirmar Avaliação"):
             st.balloons()
-            st.success("Avaliação salva com sucesso! Os dados foram enviados para a planilha mestre.")
+            st.success(f"Avaliação de {trabalho_selecionado} registrada com sucesso!")
