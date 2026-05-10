@@ -46,54 +46,74 @@ if professor_logado:
 
         # --- LÓGICA DE RUBRICAS (BASEADO NOS SEUS DOCS) ---
         
+        # --- LÓGICA DE RUBRICAS COM DESCRIÇÕES DETALHADAS ---
+        
         if turma == "TCC I":
             st.info("Rubrica TCC I (Máx: 60 pontos)")
-            # Itens conforme seu documento "FICHA AVALIAÇÃO PROJETO BANCA TCC 1"
-            itens = {
-                "Tema Contemporâneo": 3, "Resumo": 1, "Introdução": 5,
-                "Justificativa/Problema": 5, "Objetivos": 5, "Metodologia": 10,
-                "Referências": 1, "Apresentação Oral": 10, "Coerência": 10,
-                "Qualidade do Material": 9, "Tempo": 1
+            # Itens e descrições conforme seu documento de TCC 1
+            itens_tcc1 = {
+                "Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse para a comunidade acadêmica."),
+                "Resumo": (1, "É autoexplicativo, apresenta objetivos e conclusão condizentes e palavras-chaves de acordo com o DECS."),
+                "Introdução": (5, "Apresenta clareza, concisão, justificativa, sequência lógica e objetivo ao final."),
+                "Justificativa/Problema": (5, "Formatação segundo ABNT e conteúdo de justificativa, problema e hipóteses."),
+                "Objetivos": (5, "Claros e exequíveis."),
+                "Metodologia": (10, "Define tipo de estudo, local, data, população, procedimentos, instrumentos, análise e ética."),
+                "Referências": (1, "São relevantes, com fontes confiáveis e todas listadas."),
+                "Apresentação Oral": (10, "Explanação clara, com segurança, postura e domínio sobre o trabalho."),
+                "Coerência": (10, "O conteúdo da apresentação oral tem coerência com o documento textual."),
+                "Qualidade do Material": (9, "O material de apresentação é estruturado, coerente e utilizado como apoio."),
+                "Tempo": (1, "Observância do tempo determinado para apresentação.")
             }
-            for item, peso in itens.items():
-                val = st.select_slider(f"{item} (Peso {peso})", options=["Não", "Parcial", "Sim"])
-                mult = 1.0 if val == "Sim" else (0.5 if val == "Parcial" else 0.0)
-                notas[item] = mult * peso
+            for item, (peso, ajuda) in itens_tcc1.items():
+                notas[item] = st.slider(f"{item} (Máx: {peso})", 0.0, float(peso), step=0.1, help=ajuda)
 
         elif turma == "TCC II":
             st.info("Rubrica TCC II (Máx: 60 pontos)")
-            # Itens conforme seu documento "FICHAS AVALIAÇÃO TCC 2"
-            itens = {
-                "Tema": 3, "Resumo": 1, "Introdução": 5, "Metodologia": 5,
-                "Resultados": 5, "Discussão/Conclusão": 10, "Referências": 1,
-                "Apresentação Oral": 10, "Coerência": 10, "Qualidade": 9, "Tempo": 1
+            # Descrições conforme seu documento de TCC 2
+            itens_tcc2 = {
+                "Tema e Resumo": (4, "Tema contemporâneo e resumo autoexplicativo com DECS."),
+                "Introdução": (5, "Clareza, concisão, justificativa e objetivo claro."),
+                "Metodologia": (5, "Rigor metodológico e descrição dos aspectos éticos."),
+                "Resultados": (5, "Responde ao objetivo, estruturado, conciso e isento de opiniões."),
+                "Discussão e Conclusão": (10, "Foca nos achados, comparação crítica com literatura e limitações."),
+                "Referências": (1, "Fontes confiáveis e listadas corretamente."),
+                "Apresentação Oral": (10, "Segurança, postura e domínio."),
+                "Coerência": (10, "Coerência entre fala e texto."),
+                "Qualidade": (9, "Material visual estruturado e coerente."),
+                "Tempo": (1, "Mínimo 15 min e máximo 20 min.")
             }
-            for item, peso in itens.items():
-                val = st.select_slider(f"{item} (Peso {peso})", options=["Não", "Parcial", "Sim"])
-                mult = 1.0 if val == "Sim" else (0.5 if val == "Parcial" else 0.0)
-                notas[item] = mult * peso
+            for item, (peso, ajuda) in itens_tcc2.items():
+                notas[item] = st.slider(f"{item} (Máx: {peso})", 0.0, float(peso), step=0.1, help=ajuda)
 
         elif turma == "MCM IV":
             st.info("Rubrica MCM IV (Máx: 30 pontos)")
-            # Baseado no documento "FICHA DE AVALIAÇÃO DE APRESENTAÇÃO ORAL"
-            crit = ["Domínio de Conteúdo", "Coerência com Tema", "Comunicação/Postura", 
-                    "Organização/Tempo", "Recursos Visuais", "Adequação Métodos"]
-            for c in crit:
-                notas[c] = st.radio(f"{c}:", [5, 3, 0], horizontal=True, 
-                                    format_func=lambda x: f"{x} pts")
+            crit_mcm4 = {
+                "Domínio de Conteúdo": "Domínio do conteúdo e resposta aos questionamentos da banca.",
+                "Coerência": "Coerência do conteúdo com o tema abordado.",
+                "Comunicação": "Habilidades de comunicação e postura na apresentação.",
+                "Organização": "Organização da apresentação e gestão do tempo.",
+                "Recursos Visuais": "Uso dos recursos audiovisuais.",
+                "Métodos": "Adequação dos objetivos aos métodos."
+            }
+            for item, ajuda in crit_mcm4.items():
+                notas[item] = st.slider(f"{item} (Máx: 5.0)", 0.0, 5.0, step=0.1, help=ajuda)
 
         elif turma == "MCM V":
             st.info("Rubrica MCM V (Máx: 100 pontos)")
-            # Baseado no documento "RUBRICA DE AVALIAÇÃO banca MCM 5"
-            notas["Resumo"] = st.slider("Resumo", 0, 10)
-            notas["Introdução"] = st.slider("Introdução", 0, 10)
-            notas["Metodologia"] = st.slider("Metodologia", 0, 10)
-            notas["Resultados"] = st.slider("Resultados", 0, 20)
-            notas["Discussão"] = st.slider("Discussão", 0, 10)
-            notas["Conclusão"] = st.slider("Conclusão", 0, 10)
-            notas["Redação/ABNT"] = st.slider("Redação/ABNT", 0, 10)
-            notas["Arguição"] = st.slider("Arguição", 0, 10)
-            notas["Apresentação"] = st.slider("Apresentação", 0, 10)
+            ajuda_mcm5 = {
+                "Resumo": "Apresenta objetivos, métodos, resultados e conclusões? (Até 10 pts)",
+                "Introdução": "Tema adequado, embasado e objetivos claros? (Até 10 pts)",
+                "Metodologia": "Metodologia atende aos objetivos? (Até 10 pts)",
+                "Resultados": "Descritos e analisados de forma adequada e suficiente? (Até 20 pts)",
+                "Discussão": "Embasada em artigos pertinentes e atualizados? (Até 10 pts)",
+                "Conclusão": "Pertinente aos resultados e coerente com objetivos? (Até 10 pts)",
+                "Redação/ABNT": "Gramática e formatação ABNT ou Vancouver. (Até 10 pts)",
+                "Arguição": "Autonomia e capacidade para responder à banca. (Até 10 pts)",
+                "Apresentação": "Clareza, segurança, linguagem e material visual. (Até 10 pts)"
+            }
+            for item, ajuda in ajuda_mcm5.items():
+                max_v = 20.0 if item == "Resultados" else 10.0
+                notas[item] = st.slider(f"{item} (Máx: {max_v})", 0.0, max_v, step=0.1, help=ajuda)
 
         # CÁLCULO FINAL
         total_banca = sum(notas.values())
