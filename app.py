@@ -8,7 +8,7 @@ st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 try:
-    # Lê a primeira aba da planilha
+    # Lê a primeira aba da planilha independentemente do nome
     df_escalacao = conn.read()
 except:
     st.error("Erro ao ler a planilha. Verifique os Secrets e se o compartilhamento está como 'Qualquer pessoa com o link'.")
@@ -16,29 +16,28 @@ except:
 
 st.title("🎓 Portal de Avaliação - Afya Marabá")
 
-# 1. IDENTIFICAÇÃO DO AVALIADOR (Pega a 1ª coluna)
+# 1. IDENTIFICAÇÃO DO AVALIADOR (Coluna 0)
 professores = sorted(df_escalacao.iloc[:, 0].unique())
 professor_logado = st.selectbox("Selecione seu nome:", [""] + list(professores))
 
 if professor_logado:
-    # Filtra os grupos do professor selecionado
     meus_grupos = df_escalacao[df_escalacao.iloc[:, 0] == professor_logado]
     st.write(f"### Olá, Prof. {professor_logado}!")
     
-    # Seleção do Trabalho (Pega a 5ª coluna - Título)
+    # Seleção do Trabalho (Coluna 4)
     trabalho_selecionado = st.selectbox("Selecione o trabalho para avaliar:", [""] + meus_grupos.iloc[:, 4].tolist())
 
     if trabalho_selecionado:
         dados = meus_grupos[meus_grupos.iloc[:, 4] == trabalho_selecionado].iloc[0]
         
-        # Exibe o Orientador (2ª coluna)
+        # Exibe o Orientador (Coluna 1)
         st.success(f"📌 **Orientador(a):** {dados.iloc[1]}")
         with st.expander("Ver Detalhes do Grupo"):
             st.write(f"**Turma:** {dados.iloc[2]}")
             st.write(f"**Acadêmicos:** {dados.iloc[3]}")
 
         st.divider()
-        turma = str(dados.iloc[2]) # Pega a Turma (3ª coluna)
+        turma = str(dados.iloc[2])
         notas = {}
 
         # --- RUBRICA TCC I ---
@@ -50,7 +49,7 @@ if professor_logado:
                 "Introdução": (5.0, "Clareza, concisão, justificativa e sequência lógica."),
                 "Justificativa/Problema": (5.0, "Formatação ABNT e conteúdo de justificativa/hipóteses."),
                 "Objetivos": (5.0, "Claros e exequíveis."),
-                "Metodologia": (10.0, "Tipo de estudo, local, amostra, procedimentos e ética."),
+                "Metodologia": (10.0, "Tipo de estudo, local, data, amostra, procedimentos e ética."),
                 "Referências": (1.0, "Fontes confiáveis e listadas."),
                 "Apresentação Oral": (10.0, "Segurança, postura e domínio."),
                 "Coerência": (10.0, "Conteúdo oral coerente com o texto."),
@@ -115,4 +114,4 @@ if professor_logado:
         
         if st.button("Confirmar Avaliação"):
             st.balloons()
-            st.success(f"Avaliação de {trabalho_selecionado} registrada com sucesso!")
+            st.success(f"Avaliação registrada com sucesso!")
