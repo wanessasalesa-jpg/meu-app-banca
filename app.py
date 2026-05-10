@@ -9,7 +9,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 try:
     # Lendo a aba de Escalação
-    df_escalacao = conn.read(worksheet="Escalacao")
+    df_escalacao = conn.read(worksheet="Consolidacao")
 except Exception as e:
     st.error(f"Erro ao ler a aba 'Escalacao'. Verifique se o nome está correto. Erro: {e}")
     st.stop()
