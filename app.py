@@ -45,7 +45,7 @@ if email_input:
                 dados = pendentes[pendentes["Alunos"] == aluno_selecionado].iloc[0]
                 turma_bruta = str(dados['Turma']).strip().upper()
                 
-                # --- DEFINIÇÃO DE RUBRICAS (MANTIDAS CONFORME APROVADO) ---
+                # --- DEFINIÇÃO DE RUBRICAS (MANTIDAS EXATAMENTE COMO APROVADO) ---
                 notas = {}
                 if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
                     rubrica = {
@@ -113,10 +113,19 @@ if email_input:
                 # 4. SALVAMENTO
                 if st.button("Confirmar e Gravar Avaliação"):
                     try:
-                        nova_linha = pd.DataFrame([{"Avaliador": email_input, "Alunos": aluno_selecionado, "Titulo": dados['Titulo'], "Nota_Final": total}])
+                        # Dados para salvar
+                        nova_linha = pd.DataFrame([{
+                            "Avaliador": email_input, 
+                            "Alunos": aluno_selecionado, 
+                            "Titulo": dados['Titulo'], 
+                            "Nota_Final": total
+                        }])
+                        
+                        # Processo de atualização da planilha
                         df_atual = conn.read(worksheet="Respostas", ttl=0)
                         df_final = pd.concat([df_atual, nova_linha], ignore_index=True)
                         conn.update(worksheet="Respostas", data=df_final)
+                        
                         st.balloons()
                         st.success("✅ GRAVADO COM SUCESSO!")
                         time.sleep(2)
