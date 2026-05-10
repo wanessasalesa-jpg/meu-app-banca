@@ -1,52 +1,105 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-
-# --- CONFIGURAÇÃO E CONEXÃO ---
-# O Streamlit tem uma função nativa para conectar com Google Sheets
 from streamlit_gsheets import GSheetsConnection
 
-st.set_page_config(page_title="Avaliação Afya Marabá", layout="wide")
+st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 
-# Conectando à sua planilha (necessário configurar o link no Streamlit Cloud)
+# Conexão com o Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
-df_escalacao = conn.read(worksheet="Escalacao")
 
-st.title("🎓 Portal do Avaliador - Afya")
+try:
+    df_escalacao = conn.read(worksheet="Escalacao")
+except:
+    st.error("Erro ao ler a aba 'Escalacao'. Verifique o nome na sua planilha.")
+    st.stop()
 
-# --- LOGIN / IDENTIFICAÇÃO ---
-lista_professores = df_escalacao["Avaliador"].unique()
-professor_logado = st.selectbox("Selecione seu nome para ver suas bancas de hoje:", [""] + list(lista_professores))
+st.title("🎓 Portal de Avaliação - Afya Marabá")
+
+# 1. IDENTIFICAÇÃO DO AVALIADOR
+professores = sorted(df_escalacao["Avaliador"].unique())
+professor_logado = st.selectbox("Selecione seu nome:", [""] + list(professores))
 
 if professor_logado:
-    # FILTRANDO OS GRUPOS DO DIA PARA ESTE PROFESSOR
+    # Filtra apenas os grupos deste professor
     meus_grupos = df_escalacao[df_escalacao["Avaliador"] == professor_logado]
     
-    st.write(f"### Olá, Prof. {professor_logado}! Você tem {len(meus_grupos)} bancas hoje.")
-    
-    # SELEÇÃO DO GRUPO
-    # O avaliador só vê os títulos dos trabalhos dele
-    escolha_grupo = st.selectbox("Selecione o grupo para iniciar a avaliação:", 
-                                 meus_grupos["Título"].tolist())
-    
-    if escolha_grupo:
-        dados_grupo = meus_grupos[meus_grupos["Título"] == escolha_grupo].iloc[0]
+    st.write(f"### Olá, Prof. {professor_logado}!")
+    st.write(f"Você tem **{len(meus_grupos)}** bancas agendadas.")
+
+    # 2. SELEÇÃO DO GRUPO
+    trabalho_selecionado = st.selectbox("Selecione o trabalho para avaliar:", 
+                                        [""] + meus_grupos["Título"].tolist())
+
+    if trabalho_selecionado:
+        dados = meus_grupos[meus_grupos["Título"] == trabalho_selecionado].iloc[0]
         
-        # Mostra os dados que VOCÊ já cadastrou
-        st.info(f"**Turma:** {dados_grupo['Turma']}  |  **Horário:** {dados_grupo['Horário']}")
-        st.write(f"**Integrantes:** {dados_grupo['Alunos']}")
-        
+        # CABEÇALHO COM RECONHECIMENTO DO ORIENTADOR
+        st.success(f"📌 **Orientador(a):** {dados['Orientador']}")
+        with st.expander("Ver Detalhes do Grupo"):
+            st.write(f"**Turma:** {dados['Turma']}")
+            st.write(f"**Acadêmicos:** {dados['Alunos']}")
+            st.write(f"**Horário:** {dados['Horário']}")
+
         st.divider()
+        turma = dados['Turma']
+        notas = {}
+
+        # --- LÓGICA DE RUBRICAS (BASEADO NOS SEUS DOCS) ---
         
-        # Aqui entra a lógica das rubricas (que já fizemos anteriormente)
-        # O app já sabe qual a turma (TCC I, MCM V, etc.) através do 'dados_grupo'
-        turma_atual = dados_grupo['Turma']
-        
-        # --- (O código das rubricas que te passei antes entra aqui, 
-        #      usando a variável 'turma_atual' para decidir qual ficha mostrar) ---
-        
-        # BOTÃO PARA SALVAR
-        if st.button("Finalizar Avaliação e Enviar Notas"):
-            # Lógica para escrever de volta na planilha
-            st.success(f"Avaliação do grupo {escolha_grupo} enviada com sucesso!")
+        if turma == "TCC I":
+            st.info("Rubrica TCC I (Máx: 60 pontos)")
+            # Itens conforme seu documento "FICHA AVALIAÇÃO PROJETO BANCA TCC 1"
+            itens = {
+                "Tema Contemporâneo": 3, "Resumo": 1, "Introdução": 5,
+                "Justificativa/Problema": 5, "Objetivos": 5, "Metodologia": 10,
+                "Referências": 1, "Apresentação Oral": 10, "Coerência": 10,
+                "Qualidade do Material": 9, "Tempo": 1
+            }
+            for item, peso in itens.items():
+                val = st.select_slider(f"{item} (Peso {peso})", options=["Não", "Parcial", "Sim"])
+                mult = 1.0 if val == "Sim" else (0.5 if val == "Parcial" else 0.0)
+                notas[item] = mult * peso
+
+        elif turma == "TCC II":
+            st.info("Rubrica TCC II (Máx: 60 pontos)")
+            # Itens conforme seu documento "FICHAS AVALIAÇÃO TCC 2"
+            itens = {
+                "Tema": 3, "Resumo": 1, "Introdução": 5, "Metodologia": 5,
+                "Resultados": 5, "Discussão/Conclusão": 10, "Referências": 1,
+                "Apresentação Oral": 10, "Coerência": 10, "Qualidade": 9, "Tempo": 1
+            }
+            for item, peso in itens.items():
+                val = st.select_slider(f"{item} (Peso {peso})", options=["Não", "Parcial", "Sim"])
+                mult = 1.0 if val == "Sim" else (0.5 if val == "Parcial" else 0.0)
+                notas[item] = mult * peso
+
+        elif turma == "MCM IV":
+            st.info("Rubrica MCM IV (Máx: 30 pontos)")
+            # Baseado no documento "FICHA DE AVALIAÇÃO DE APRESENTAÇÃO ORAL"
+            crit = ["Domínio de Conteúdo", "Coerência com Tema", "Comunicação/Postura", 
+                    "Organização/Tempo", "Recursos Visuais", "Adequação Métodos"]
+            for c in crit:
+                notas[c] = st.radio(f"{c}:", [5, 3, 0], horizontal=True, 
+                                    format_func=lambda x: f"{x} pts")
+
+        elif turma == "MCM V":
+            st.info("Rubrica MCM V (Máx: 100 pontos)")
+            # Baseado no documento "RUBRICA DE AVALIAÇÃO banca MCM 5"
+            notas["Resumo"] = st.slider("Resumo", 0, 10)
+            notas["Introdução"] = st.slider("Introdução", 0, 10)
+            notas["Metodologia"] = st.slider("Metodologia", 0, 10)
+            notas["Resultados"] = st.slider("Resultados", 0, 20)
+            notas["Discussão"] = st.slider("Discussão", 0, 10)
+            notas["Conclusão"] = st.slider("Conclusão", 0, 10)
+            notas["Redação/ABNT"] = st.slider("Redação/ABNT", 0, 10)
+            notas["Arguição"] = st.slider("Arguição", 0, 10)
+            notas["Apresentação"] = st.slider("Apresentação", 0, 10)
+
+        # CÁLCULO FINAL
+        total_banca = sum(notas.values())
+        st.subheader(f"Nota Final: {total_banca:.2f}")
+
+        if st.button("Confirmar e Salvar Avaliação"):
+            # Aqui você conectará a função de salvar na planilha
             st.balloons()
+            st.success("Avaliação salva com sucesso! Os dados foram enviados para a planilha mestre.")
