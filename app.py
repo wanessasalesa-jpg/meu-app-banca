@@ -4,10 +4,10 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import time
 
-# Configuração estável
+# Configuração focada em mobile
 st.set_page_config(page_title="Avaliação Afya", layout="centered")
 
-# CSS para botões
+# CSS para botões rápidos
 st.markdown("""
     <style>
     .stButton button {
@@ -26,11 +26,11 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def get_data(aba, ttl_sec=2):
     return conn.read(worksheet=aba, ttl=ttl_sec)
 
-# 1. CARREGAMENTO
+# 1. CARREGAMENTO DOS DADOS
 try:
     df_escalacao = get_data("Escalacao", ttl_sec=300)
 except:
-    st.error("Conectando ao banco de dados...")
+    st.error("Conectando ao servidor...")
     time.sleep(1)
     st.rerun()
 
@@ -115,71 +115,31 @@ else:
                 st.write("### 📝 Critérios")
                 notas = {}
                 
+                # Rubricas originais preservadas
                 if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
-                    rubrica = {
-                        "Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse acadêmico."),
-                        "Resumo": (1, "Autoexplicativo, objetivos e conclusão condizentes, uso de DECS."),
-                        "Introdução": (5, "Clareza, concisão e sequência lógica dos argumentos."),
-                        "Justificativa/Problema": (5, "Formatação ABNT e relevância do problema."),
-                        "Objetivos": (5, "Claros, exequíveis e condizentes com o tema."),
-                        "Metodologia": (10, "Tipo de estudo, população, local, ética e análise de dados."),
-                        "Referências": (1, "Fontes confiáveis, atuais e listadas corretamente."),
-                        "Apresentação Oral": (10, "Segurança, postura, dicção e domínio do conteúdo."),
-                        "Coerência": (10, "Conteúdo da fala em sintonia com o texto escrito."),
-                        "Qualidade Visual": (9, "Material visual de apoio bem estruturado e organizado."),
-                        "Tempo (10-15min)": (1, "Respeito ao limite de tempo regulamentar.")
-                    }
+                    rubrica = {"Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse acadêmico."), "Resumo": (1, "Autoexplicativo, objetivos e conclusão condizentes, uso de DECS."), "Introdução": (5, "Clareza, concisão e sequência lógica dos argumentos."), "Justificativa/Problema": (5, "Formatação ABNT e relevância do problema."), "Objetivos": (5, "Claros, exequíveis e condizentes com o tema."), "Metodologia": (10, "Tipo de estudo, população, local, ética e análise de dados."), "Referências": (1, "Fontes confiáveis, atuais e listadas corretamente."), "Apresentação Oral": (10, "Segurança, postura, dicção e domínio do conteúdo."), "Coerência": (10, "Conteúdo da fala em sintonia com o texto escrito."), "Qualidade Visual": (9, "Material visual de apoio bem estruturado e organizado."), "Tempo (10-15min)": (1, "Respeito ao limite de tempo regulamentar.")}
                     nota_max = 60
                 elif "TCC II" in turma_bruta:
-                    rubrica = {
-                        "Tema e Resumo": (4, "Contemporaneidade e uso correto de DECS."),
-                        "Introdução": (5, "Justificativa e objetivos claros e bem fundamentados."),
-                        "Metodologia": (5, "Rigor científico e observância aos preceitos éticos."),
-                        "Resultados": (5, "Descrição concisa que responde aos objetivos."),
-                        "Discussão e Conclusão": (10, "Análise crítica dos achados e limitações do estudo."),
-                        "Referências": (1, "Fontes bibliográficas pertinentes e atualizadas."),
-                        "Apresentação Oral": (10, "Domínio de palco, clareza e segurança."),
-                        "Coerência": (10, "Lógica entre a explanação oral e o trabalho escrito."),
-                        "Qualidade Visual": (9, "Slides organizados e de fácil leitura."),
-                        "Tempo (15-20min)": (1, "Cumprimento do tempo estipulado.")
-                    }
+                    rubrica = {"Tema e Resumo": (4, "Contemporaneidade e uso correto de DECS."), "Introdução": (5, "Justificativa e objetivos claros e bem fundamentados."), "Metodologia": (5, "Rigor científico e observância aos preceitos éticos."), "Resultados": (5, "Descrição concisa que responde aos objetivos."), "Discussão e Conclusão": (10, "Análise crítica dos achados e limitações do estudo."), "Referências": (1, "Fontes bibliográficas pertinentes e atualizadas."), "Apresentação Oral": (10, "Domínio de palco, clareza e segurança."), "Coerência": (10, "Lógica entre a explanação oral e o trabalho escrito."), "Qualidade Visual": (9, "Slides organizados e de fácil leitura."), "Tempo (15-20min)": (1, "Cumprimento do tempo estipulado.")}
                     nota_max = 60
                 elif "MCM V" in turma_bruta:
-                    rubrica = {
-                        "Resumo": (10, "Qualidade da síntese do trabalho."),
-                        "Introdução": (10, "Fundamentação teórica e objetivos."),
-                        "Metodologia": (10, "Desenho do estudo e descrição dos métodos."),
-                        "Resultados": (20, "Apresentação e análise clara dos dados obtidos."),
-                        "Discussão": (10, "Confronto crítico com a literatura."),
-                        "Conclusão": (10, "Pertinência dos fechamentos aos resultados."),
-                        "Redação/ABNT": (10, "Correção gramatical e normas técnicas."),
-                        "Arguição": (10, "Autonomia e segurança nas respostas."),
-                        "Apresentação": (10, "Fluidez, clareza e domínio de palco (15-20 min).")
-                    }
+                    rubrica = {"Resumo": (10, "Qualidade da síntese do trabalho."), "Introdução": (10, "Fundamentação teórica e objetivos."), "Metodologia": (10, "Desenho do estudo e descrição dos métodos."), "Resultados": (20, "Apresentação e análise clara dos dados obtidos."), "Discussão": (10, "Confronto crítico com a literatura."), "Conclusão": (10, "Pertinência dos fechamentos aos resultados."), "Redação/ABNT": (10, "Correção gramatical e normas técnicas."), "Arguição": (10, "Autonomia e segurança nas respostas."), "Apresentação": (10, "Fluidez, clareza e domínio de palco (15-20 min).")}
                     nota_max = 100
                 else:
-                    rubrica = {
-                        "Domínio de Conteúdo": (5, "Conhecimento demonstrado e resposta à banca."),
-                        "Coerência": (5, "Lógica entre o tema e a apresentação."),
-                        "Comunicação": (5, "Clareza, tom de voz e postura profissional."),
-                        "Organização/Tempo": (5, "Gestão do tempo de 10 a 15 minutos."),
-                        "Recursos Visuais": (5, "Qualidade dos slides e apoio audiovisual."),
-                        "Métodos": (5, "Adequação da metodologia aos objetivos propostos.")
-                    }
+                    rubrica = {"Domínio de Conteúdo": (5, "Conhecimento demonstrado."), "Coerência": (5, "Lógica tema/apresentação."), "Comunicação": (5, "Clareza e postura."), "Organização/Tempo": (5, "Gestão do tempo."), "Recursos Visuais": (5, "Qualidade slides."), "Métodos": (5, "Adequação objetivos.")}
                     nota_max = 30
 
                 st.warning(f"**Nota máxima: {nota_max} pts**")
-
                 for item, (p, help_t) in rubrica.items():
-                    # Volta do Help dentro do slider
                     notas[item] = st.slider(f"**{item}**", 0, p, 0, help=help_t, key=f"s_{item}")
 
                 total = sum(notas.values())
                 st.markdown(f"## Total: {total} / {nota_max}")
 
+                # --- LÓGICA DE GRAVAÇÃO SEM ERRO DUPLO ---
                 if st.button("🚀 GRAVAR AVALIAÇÃO"):
+                    sucesso = False
                     try:
-                        # Processo de gravação limpo
                         df_at = conn.read(worksheet="Respostas", ttl=0)
                         nova_l = pd.DataFrame([{
                             "Avaliador": nome_avaliador, 
@@ -191,13 +151,14 @@ else:
                         }])
                         df_f = pd.concat([df_at, nova_l], ignore_index=True)
                         conn.update(worksheet="Respostas", data=df_f)
-                        
-                        # Animação e Sucesso
+                        sucesso = True
+                    except Exception as e:
+                        st.error(f"Erro na rede: Tente clicar novamente. (Detalhe: {e})")
+                    
+                    if sucesso:
                         st.balloons()
                         st.success("✅ GRAVADO COM SUCESSO!")
                         time.sleep(2)
                         st.rerun()
-                    except:
-                        st.error("Erro na rede. Tente gravar novamente.")
 
             formulario_avaliacao()
