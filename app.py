@@ -6,19 +6,23 @@ import time
 
 st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 
-# --- CONEXÃO DIRETA E PROTEGIDA ---
-# O parâmetro ttl=0 evita que o app use dados antigos em cache
+# --- CONEXÃO E FUNÇÕES ---
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+def get_data(aba):
+    # ttl=0 é vital para ver as notas caindo na hora na planilha
+    return conn.read(worksheet=aba, ttl=0)
+
+# --- 1. CARREGAMENTO INICIAL ---
 try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
+    df_escalacao = get_data("Escalacao")
 except Exception as e:
     st.error(f"Erro de conexão: {e}")
-    st.info("Verifique se as chaves JSON estão nos Secrets e se o e-mail da Service Account é EDITOR na planilha.")
     st.stop()
 
 st.title("🎓 Portal de Avaliação - Afya Marabá")
 
-# --- LOGIN ---
+# --- 2. LOGIN ---
 email_input = st.text_input("Acesso restrito: Digite seu e-mail", placeholder="exemplo@afya.com.br").strip().lower()
 
 if email_input:
@@ -26,9 +30,10 @@ if email_input:
         prof_dados = df_escalacao[df_escalacao['Email'].str.lower() == email_input].iloc[0]
         st.success(f"Bem-vindo(a), Prof(a). {prof_dados['Avaliador']}!")
 
-        # --- FILTRO DE PENDENTES ---
+        # --- 3. FILTRO DE PENDENTES ---
         try:
             df_respostas = get_data("Respostas")
+            # Verifica quem já foi avaliado por este professor
             feitos = df_respostas[df_respostas["Avaliador"] == email_input]["Alunos"].tolist()
         except:
             feitos = []
@@ -42,60 +47,59 @@ if email_input:
             aluno_selecionado = st.selectbox("Selecione o grupo de alunos:", [""] + pendentes["Alunos"].tolist())
 
             if aluno_selecionado:
+                # Localiza os dados exatos do grupo selecionado
                 dados = pendentes[pendentes["Alunos"] == aluno_selecionado].iloc[0]
-                turma = str(dados['Turma'])
+                turma = str(dados['Turma']).upper() # Padroniza para evitar erro de leitura
                 
-                # --- TRAVA DE HORÁRIO ---
-                try:
-                    agora = datetime.now()
-                    dt_banca = datetime.strptime(str(dados['Data']), '%d/%m/%Y').date()
-                    hr_banca = datetime.strptime(str(dados['Horario']), '%H:%M').time()
-                    if agora < datetime.combine(dt_banca, hr_banca):
-                        st.warning(f"⏳ Disponível apenas em {dados['Data']} às {dados['Horario']}.")
-                        st.stop()
-                except:
-                    pass
-
+                # Exibição das informações que haviam sumido
                 st.info(f"📚 **Título:** {dados['Titulo']}")
+                st.write(f"👤 **Orientador(a):** {dados['Orientador']}")
+                st.write(f"🏫 **Turma:** {turma}")
+
+                st.divider()
                 
-                # --- RUBRICAS OFICIAIS ---
+                # --- 4. RUBRICAS DETALHADAS (HELP) ---
                 notas = {}
+                
                 if "TCC I" in turma and "TCC II" not in turma:
                     rubrica = {
-                        "Tema Contemporâneo": (3, "Escolha de tema contemporâneo."),
-                        "Resumo": (1, "Autoexplicativo, objetivos e DECS."),
-                        "Introdução": (5, "Clareza e sequência lógica."),
-                        "Justificativa/Problema": (5, "Formatação e conteúdo."),
-                        "Objetivos": (5, "Claros e exequíveis."),
-                        "Metodologia": (10, "Rigor científico e ética."),
-                        "Referências": (1, "Fontes confiáveis."),
-                        "Apresentação Oral": (10, "Segurança e domínio."),
-                        "Coerência": (10, "Sintonia fala/texto."),
-                        "Qualidade Visual": (9, "Material estruturado."),
-                        "Tempo (10-15min)": (1, "Respeito ao tempo.")
+                        "Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse acadêmico."),
+                        "Resumo": (1, "Autoexplicativo, objetivos e conclusão condizentes, uso de DECS."),
+                        "Introdução": (5, "Clareza, concisão e sequência lógica dos argumentos."),
+                        "Justificativa/Problema": (5, "Formatação ABNT e relevância do problema."),
+                        "Objetivos": (5, "Claros, exequíveis e condizentes com o tema."),
+                        "Metodologia": (10, "Tipo de estudo, população, local, ética e análise de dados."),
+                        "Referências": (1, "Fontes confiáveis, atuais e listadas corretamente."),
+                        "Apresentação Oral": (10, "Segurança, postura, dicção e domínio do conteúdo."),
+                        "Coerência": (10, "Conteúdo da fala em sintonia com o texto escrito."),
+                        "Qualidade Visual": (9, "Material visual de apoio bem estruturado e organizado."),
+                        "Tempo (10-15min)": (1, "Respeito ao limite de tempo regulamentar.")
                     }
                 elif "TCC II" in turma:
                     rubrica = {
-                        "Tema e Resumo": (4, "Resumo e DECS."),
-                        "Introdução": (5, "Objetivos claros."),
-                        "Metodologia": (5, "Rigor e ética."),
-                        "Resultados": (5, "Responde ao objetivo."),
-                        "Discussão/Conclusão": (10, "Análise crítica."),
-                        "Referências": (1, "Fontes listadas."),
-                        "Apresentação Oral": (10, "Postura e domínio."),
-                        "Coerência": (10, "Sintonia fala/texto."),
-                        "Qualidade Visual": (9, "Material estruturado."),
-                        "Tempo (15-20min)": (1, "Respeito ao tempo.")
+                        "Tema e Resumo": (4, "Contemporaneidade e uso correto de DECS."),
+                        "Introdução": (5, "Justificativa e objetivos claros e bem fundamentados."),
+                        "Metodologia": (5, "Rigor científico e observância aos preceitos éticos."),
+                        "Resultados": (5, "Descrição concisa que responde aos objetivos."),
+                        "Discussão e Conclusão": (10, "Análise crítica dos achados e limitações do estudo."),
+                        "Referências": (1, "Fontes bibliográficas pertinentes e atualizadas."),
+                        "Apresentação Oral": (10, "Domínio de palco, clareza e segurança."),
+                        "Coerência": (10, "Lógica entre a explanação oral e o trabalho escrito."),
+                        "Qualidade Visual": (9, "Slides organizados e de fácil leitura."),
+                        "Tempo (15-20min)": (1, "Cumprimento do tempo estipulado.")
                     }
                 elif "MCM IV" in turma:
                     rubrica = {
-                        "Domínio": (5, "Conhecimento."), "Coerência": (5, "Lógica."),
-                        "Comunicação": (5, "Clareza."), "Organização/Tempo": (5, "Gestão."),
-                        "Recursos": (5, "Audiovisual."), "Métodos": (5, "Adequação.")
+                        "Domínio de Conteúdo": (5, "Conhecimento demonstrado e resposta aos questionamentos."),
+                        "Coerência": (5, "Lógica entre o tema e a apresentação."),
+                        "Comunicação": (5, "Clareza, tom de voz e postura profissional."),
+                        "Organização/Tempo": (5, "Gestão do tempo de 10 a 15 minutos."),
+                        "Recursos Visuais": (5, "Qualidade dos slides e apoio audiovisual."),
+                        "Métodos": (5, "Adequação da metodologia aos objetivos propostos.")
                     }
-                else: # MCM V
+                else: # MCM V ou Padrão
                     rubrica = {
-                        "Resumo": (10, "Síntese."), "Introdução": (10, "Objetivos."),
+                        "Resumo": (10, "Síntese do trabalho."), "Introdução": (10, "Objetivos."),
                         "Metodologia": (10, "Desenho."), "Resultados": (20, "Dados."),
                         "Discussão": (10, "Crítica."), "Conclusão": (10, "Pertinência."),
                         "Redação": (10, "ABNT."), "Arguição": (10, "Autonomia."),
@@ -108,8 +112,8 @@ if email_input:
                 total = sum(notas.values())
                 st.markdown(f"### Nota Final: **{total}**")
 
-                # --- SALVAMENTO ---
-                if st.button("Confirmar e Salvar"):
+                # --- 5. SALVAMENTO ---
+                if st.button("Confirmar e Salvar Avaliação"):
                     try:
                         nova_linha = pd.DataFrame([{
                             "Avaliador": email_input,
@@ -117,13 +121,14 @@ if email_input:
                             "Titulo": dados['Titulo'],
                             "Nota_Final": total
                         }])
+                        # Salva na planilha
                         conn.create(worksheet="Respostas", data=nova_linha)
                         
                         st.balloons()
-                        st.success("✅ Gravado! Redirecionando...")
+                        st.success("✅ Avaliação salva! Voltando à tela inicial...")
                         time.sleep(2)
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Erro ao salvar: {e}")
+                        st.error(f"Erro ao salvar na planilha: {e}")
     else:
-        st.error("E-mail não cadastrado.")
+        st.error("E-mail não encontrado na escala de avaliadores.")
