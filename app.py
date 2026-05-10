@@ -6,7 +6,7 @@ st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- LEITURA DA ESCALAÇÃO ---
+# --- LEITURA DA ESCALACAO ---
 try:
     df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
 except Exception as e:
