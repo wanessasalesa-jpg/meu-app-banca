@@ -128,21 +128,60 @@ else:
                 st.write("### 📝 Critérios")
                 notas = {}
                 
-                # Rubricas
+                # --- DEFINIÇÃO DAS RUBRICAS COMPLETAS ---
                 if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
-                    rubrica = {"Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse acadêmico."), "Resumo": (1, "Autoexplicativo, objetivos e conclusão condizentes, uso de DECS."), "Introdução": (5, "Clareza, concisão e sequência lógica dos argumentos."), "Justificativa/Problema": (5, "Formatação ABNT e relevância do problema."), "Objetivos": (5, "Claros, exequíveis e condizentes com o tema."), "Metodologia": (10, "Tipo de estudo, população, local, ética e análise de dados."), "Referências": (1, "Fontes confiáveis, atuais e listadas corretamente."), "Apresentação Oral": (10, "Segurança, postura, dicção e domínio do conteúdo."), "Coerência": (10, "Conteúdo da fala em sintonia com o texto escrito."), "Qualidade Visual": (9, "Material visual de apoio bem estruturado e organizado."), "Tempo (10-15min)": (1, "Respeito ao limite de tempo regulamentar.")}
+                    rubrica = {
+                        "Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse acadêmico."),
+                        "Resumo": (1, "Autoexplicativo, objetivos e conclusão condizentes, uso de DECS."),
+                        "Introdução": (5, "Clareza, concisão e sequência lógica dos argumentos."),
+                        "Justificativa/Problema": (5, "Formatação ABNT e relevância do problema."),
+                        "Objetivos": (5, "Claros, exequíveis e condizentes com o tema."),
+                        "Metodologia": (10, "Tipo de estudo, população, local, ética e análise de dados."),
+                        "Referências": (1, "Fontes confiáveis, atuais e listadas corretamente."),
+                        "Apresentação Oral": (10, "Segurança, postura, dicção e domínio do conteúdo."),
+                        "Coerência": (10, "Conteúdo da fala em sintonia com o texto escrito."),
+                        "Qualidade Visual": (9, "Material visual de apoio bem estruturado e organizado."),
+                        "Tempo (10-15min)": (1, "Respeito ao limite de tempo regulamentar.")
+                    }
                 elif "TCC II" in turma_bruta:
-                    rubrica = {"Tema e Resumo": (4, "Contemporaneidade e uso correto de DECS."), "Introdução": (5, "Justificativa e objetivos claros e bem fundamentados."), "Metodologia": (5, "Rigor científico e observância aos preceitos éticos."), "Resultados": (5, "Descrição concisa que responde aos objetivos."), "Discussão e Conclusão": (10, "Análise crítica dos achados e limitações do estudo."), "Referências": (1, "Fontes bibliográficas pertinentes e atualizadas."), "Apresentação Oral": (10, "Domínio de palco, clareza e segurança."), "Coerência": (10, "Lógica entre a explanação oral e o trabalho escrito."), "Qualidade Visual": (9, "Slides organizados e de fácil leitura."), "Tempo (15-20min)": (1, "Cumprimento do tempo estipulado.")}
+                    rubrica = {
+                        "Tema e Resumo": (4, "Contemporaneidade e uso correto de DECS."),
+                        "Introdução": (5, "Justificativa e objetivos claros e bem fundamentados."),
+                        "Metodologia": (5, "Rigor científico e observância aos preceitos éticos."),
+                        "Resultados": (5, "Descrição concisa que responde aos objetivos."),
+                        "Discussão e Conclusão": (10, "Análise crítica dos achados e limitações do estudo."),
+                        "Referências": (1, "Fontes bibliográficas pertinentes e atualizadas."),
+                        "Apresentação Oral": (10, "Domínio de palco, clareza e segurança."),
+                        "Coerência": (10, "Lógica entre a explanação oral e o trabalho escrito."),
+                        "Qualidade Visual": (9, "Slides organizados e de fácil leitura."),
+                        "Tempo (15-20min)": (1, "Cumprimento do tempo estipulado.")
+                    }
                 elif "MCM V" in turma_bruta:
-                    rubrica = {"Resumo": (10, "Qualidade da síntese do trabalho."), "Introdução": (10, "Fundamentação teórica e objetivos."), "Metodologia": (10, "Desenho do estudo e descrição dos métodos."), "Resultados": (20, "Apresentação e análise clara dos dados obtidos."), "Discussão": (10, "Confronto crítico com a literatura."), "Conclusão": (10, "Pertinência dos fechamentos aos resultados."), "Redação/ABNT": (10, "Correção gramatical e normas técnicas."), "Arguição": (10, "Autonomia e segurança nas respostas."), "Apresentação": (10, "Fluidez, clareza e domínio de palco (15-20 min).")}
-                else:
-                    rubrica = {"Domínio de Conteúdo": (5, "Conhecimento demonstrado."), "Coerência": (5, "Lógica."), "Comunicação": (5, "Postura."), "Organização/Tempo": (5, "Gestão."), "Recursos Visuais": (5, "Qualidade."), "Métodos": (5, "Adequação.")}
+                    rubrica = {
+                        "Resumo": (10, "Qualidade da síntese do trabalho, clareza e uso de descritores."),
+                        "Introdução": (10, "Fundamentação teórica, delimitação do tema e clareza dos objetivos."),
+                        "Metodologia": (10, "Desenho do estudo, descrição da população, local e métodos."),
+                        "Resultados": (20, "Apresentação e análise clara e objetiva dos dados obtidos."),
+                        "Discussão": (10, "Confronto crítico dos resultados com a literatura pertinente."),
+                        "Conclusão": (10, "Pertinência das conclusões em relação aos objetivos propostos."),
+                        "Redação/ABNT": (10, "Correção gramatical, fluidez do texto e normas técnicas."),
+                        "Arguição": (10, "Autonomia, segurança e clareza nas respostas à banca."),
+                        "Apresentação": (10, "Fluidez, clareza na fala e domínio de palco (15-20 min).")
+                    }
+                else: # Inclui MCM IV ou outros
+                    rubrica = {
+                        "Domínio de Conteúdo": (5, "Conhecimento demonstrado e resposta firme aos questionamentos."),
+                        "Coerência": (5, "Lógica entre o tema proposto e a apresentação realizada."),
+                        "Comunicação": (5, "Clareza, tom de voz, dicção e postura profissional."),
+                        "Organização/Tempo": (5, "Gestão do tempo de 10 a 15 minutos."),
+                        "Recursos Visuais": (5, "Qualidade, organização e leitura dos slides."),
+                        "Métodos": (5, "Adequação da metodologia utilizada para atingir os objetivos.")
+                    }
 
                 nota_max = sum(p for p, h in rubrica.values())
                 st.warning(f"**Nota máxima: {nota_max} pts**")
                 
                 for item, (p, help_t) in rubrica.items():
-                    # Agora o item mostra o valor máximo no título fixo: "Critério (X pts)"
                     notas[item] = st.slider(f"**{item} ({p} pts)**", 0, p, 0, help=help_t, key=f"s_{item}")
 
                 total = sum(notas.values())
@@ -152,11 +191,11 @@ else:
                 conf_zero = True
                 if tem_zero:
                     st.error("⚠️ Existem critérios com nota zero.")
-                    conf_zero = st.checkbox("Confirmo as notas zero.")
+                    conf_zero = st.checkbox("Confirmo que as notas zero são intencionais.")
 
                 if st.button("🚀 GRAVAR AVALIAÇÃO"):
                     if tem_zero and not conf_zero:
-                        st.warning("Confirme as notas zero.")
+                        st.warning("Confirme as notas zero para prosseguir.")
                     else:
                         sucesso = False
                         try:
