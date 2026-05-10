@@ -123,13 +123,12 @@ else:
                 st.write(f"**Título:** {dados['Titulo']}")
                 st.write(f"**Orientador:** {dados['Orientador']}")
 
-            # --- FRAGMENTO DE AVALIAÇÃO ---
             @st.fragment
             def formulario_avaliacao():
                 st.write("### 📝 Critérios")
                 notas = {}
                 
-                # Rubricas originais
+                # Rubricas
                 if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
                     rubrica = {"Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse acadêmico."), "Resumo": (1, "Autoexplicativo, objetivos e conclusão condizentes, uso de DECS."), "Introdução": (5, "Clareza, concisão e sequência lógica dos argumentos."), "Justificativa/Problema": (5, "Formatação ABNT e relevância do problema."), "Objetivos": (5, "Claros, exequíveis e condizentes com o tema."), "Metodologia": (10, "Tipo de estudo, população, local, ética e análise de dados."), "Referências": (1, "Fontes confiáveis, atuais e listadas corretamente."), "Apresentação Oral": (10, "Segurança, postura, dicção e domínio do conteúdo."), "Coerência": (10, "Conteúdo da fala em sintonia com o texto escrito."), "Qualidade Visual": (9, "Material visual de apoio bem estruturado e organizado."), "Tempo (10-15min)": (1, "Respeito ao limite de tempo regulamentar.")}
                 elif "TCC II" in turma_bruta:
@@ -143,18 +142,17 @@ else:
                 st.warning(f"**Nota máxima: {nota_max} pts**")
                 
                 for item, (p, help_t) in rubrica.items():
-                    # VOLTA DO HELP PADRÃO (?) SEM TEXTO SOBREPOSTO
-                    notas[item] = st.slider(f"**{item}**", 0, p, 0, help=help_t, key=f"s_{item}")
+                    # Agora o item mostra o valor máximo no título fixo: "Critério (X pts)"
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", 0, p, 0, help=help_t, key=f"s_{item}")
 
                 total = sum(notas.values())
                 st.markdown(f"## Total: {total} / {nota_max}")
 
                 tem_zero = any(v == 0 for v in notas.values())
+                conf_zero = True
                 if tem_zero:
                     st.error("⚠️ Existem critérios com nota zero.")
                     conf_zero = st.checkbox("Confirmo as notas zero.")
-                else:
-                    conf_zero = True
 
                 if st.button("🚀 GRAVAR AVALIAÇÃO"):
                     if tem_zero and not conf_zero:
