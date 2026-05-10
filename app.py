@@ -6,12 +6,14 @@ import time
 
 st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 
+# --- CONEXÃO E FUNÇÕES (DEFINIDAS NO TOPO) ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data(aba):
+    """Função para ler dados da planilha com cache zerado"""
     return conn.read(worksheet=aba, ttl=0)
 
-# 1. CARREGAMENTO
+# 1. CARREGAMENTO INICIAL
 try:
     df_escalacao = get_data("Escalacao")
 except Exception as e:
@@ -20,6 +22,7 @@ except Exception as e:
 
 st.title("🎓 Portal de Avaliação - Afya Marabá")
 
+# --- LOGIN ---
 email_input = st.text_input("Acesso restrito: Digite seu e-mail", placeholder="exemplo@afya.com.br").strip().lower()
 
 if email_input:
@@ -27,7 +30,7 @@ if email_input:
         prof_dados = df_escalacao[df_escalacao['Email'].str.lower() == email_input].iloc[0]
         st.success(f"Bem-vindo(a), Prof(a). {prof_dados['Avaliador']}!")
 
-        # 2. FILTRO DE PENDENTES
+        # 2. FILTRO DE TRABALHOS PENDENTES
         try:
             df_respostas = get_data("Respostas")
             feitos = df_respostas[df_respostas["Avaliador"] == email_input]["Alunos"].tolist()
@@ -48,37 +51,36 @@ if email_input:
                 
                 st.info(f"📚 **Título:** {dados['Titulo']}\n\n👤 **Orientador:** {dados['Orientador']}")
 
-                # 3. RUBRICAS OFICIAIS COM PESOS CORRIGIDOS
+                # 3. RUBRICAS E PESOS (MCM V = 100 PTS)
                 notas = {}
                 
-                # Lógica específica para cada Turma
                 if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
                     rubrica = {
-                        "Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse acadêmico."),
+                        "Tema Contemporâneo": (3, "Escolha de tema contemporâneo e de interesse acadêmico."),
                         "Resumo": (1, "Autoexplicativo, objetivos e conclusão condizentes, uso de DECS."),
-                        "Introdução": (5, "Clareza, concisão e sequência lógica dos argumentos."),
-                        "Justificativa/Problema": (5, "Formatação ABNT e relevância do problema."),
-                        "Objetivos": (5, "Claros, exequíveis e condizentes com o tema."),
-                        "Metodologia": (10, "Tipo de estudo, população, local, ética e análise de dados."),
-                        "Referências": (1, "Fontes confiáveis, atuais e listadas corretamente."),
-                        "Apresentação Oral": (10, "Segurança, postura, dicção e domínio do conteúdo."),
-                        "Coerência": (10, "Conteúdo da fala em sintonia com o texto escrito."),
-                        "Qualidade Visual": (9, "Material visual de apoio bem estruturado e organizado."),
-                        "Tempo (10-15min)": (1, "Respeito ao limite de tempo regulamentar.")
+                        "Introdução": (5, "Clareza, concisão e sequência lógica."),
+                        "Justificativa/Problema": (5, "Formatação ABNT e relevância."),
+                        "Objetivos": (5, "Claros e exequíveis."),
+                        "Metodologia": (10, "Tipo de estudo, local, ética e análise."),
+                        "Referências": (1, "Fontes confiáveis e listadas."),
+                        "Apresentação Oral": (10, "Segurança, postura e domínio."),
+                        "Coerência": (10, "Sintonia fala/texto."),
+                        "Qualidade Visual": (9, "Material estruturado."),
+                        "Tempo (10-15min)": (1, "Respeito ao limite de tempo.")
                     }
                     nota_max = 60
                 elif "TCC II" in turma_bruta:
                     rubrica = {
                         "Tema e Resumo": (4, "Contemporaneidade e uso correto de DECS."),
-                        "Introdução": (5, "Justificativa e objetivos claros e bem fundamentados."),
-                        "Metodologia": (5, "Rigor científico e observância aos preceitos éticos."),
-                        "Resultados": (5, "Descrição concisa que responde aos objetivos."),
-                        "Discussão e Conclusão": (10, "Análise crítica dos achados e limitações do estudo."),
-                        "Referências": (1, "Fontes bibliográficas pertinentes e atualizadas."),
-                        "Apresentação Oral": (10, "Domínio de palco, clareza e segurança."),
-                        "Coerência": (10, "Lógica entre a explanação oral e o trabalho escrito."),
-                        "Qualidade Visual": (9, "Slides organizados e de fácil leitura."),
-                        "Tempo (15-20min)": (1, "Cumprimento do tempo estipulado.")
+                        "Introdução": (5, "Justificativa e objetivos claros."),
+                        "Metodologia": (5, "Rigor científico e ética."),
+                        "Resultados": (5, "Descrição que responde aos objetivos."),
+                        "Discussão e Conclusão": (10, "Análise crítica dos achados."),
+                        "Referências": (1, "Fontes pertinentes."),
+                        "Apresentação Oral": (10, "Domínio de palco e segurança."),
+                        "Coerência": (10, "Lógica entre fala e texto."),
+                        "Qualidade Visual": (9, "Slides organizados."),
+                        "Tempo (15-20min)": (1, "Cumprimento do tempo.")
                     }
                     nota_max = 60
                 elif "MCM V" in turma_bruta:
@@ -91,25 +93,25 @@ if email_input:
                         "Conclusão": (10, "Pertinência dos fechamentos aos resultados."),
                         "Redação/ABNT": (10, "Correção gramatical e normas técnicas."),
                         "Arguição": (10, "Autonomia e segurança nas respostas."),
-                        "Apresentação": (10, "Fluidez, clareza e domínio de palco (15-20 min).")
+                        "Apresentação": (10, "Fluidez, clareza e domínio (15-20 min).")
                     }
                     nota_max = 100
-                else: # MCM IV ou outros
+                else: # MCM IV ou Padrão
                     rubrica = {
-                        "Domínio de Conteúdo": (5, "Conhecimento demonstrado e resposta à banca."),
-                        "Coerência": (5, "Sintonia entre o tema e a apresentação."),
-                        "Comunicação": (5, "Clareza, tom de voz e postura profissional."),
-                        "Organização/Tempo": (5, "Gestão do tempo de 10 a 15 minutos."),
-                        "Recursos Visuais": (5, "Qualidade dos slides e apoio audiovisual."),
-                        "Métodos": (5, "Adequação da metodologia aos objetivos propostos.")
+                        "Domínio": (5, "Conhecimento e resposta à banca."),
+                        "Coerência": (5, "Sintonia tema/apresentação."),
+                        "Comunicação": (5, "Clareza e postura profissional."),
+                        "Organização/Tempo": (5, "Gestão do tempo (10-15 min)."),
+                        "Recursos Visuais": (5, "Qualidade do material."),
+                        "Métodos": (5, "Adequação objetivos x métodos.")
                     }
                     nota_max = 30
 
-                # RETORNO DO AVISO DE NOTA MÁXIMA
+                # AVISO DE NOTA MÁXIMA
                 st.warning(f"⚠️ **Nota máxima para {turma_bruta}: {nota_max} pontos.**")
 
                 for item, (p, help_t) in rubrica.items():
-                    notas[item] = st.slider(f"{item} (Máx: {p})", 0, p, 1, help=help_t)
+                    notas[item] = st.slider(f"{item} (Até {p})", 0, p, 1, help=help_t)
 
                 total = sum(notas.values())
                 st.markdown(f"### Nota Final: **{total}** / {nota_max}")
@@ -124,12 +126,13 @@ if email_input:
                             "Nota_Final": total
                         }])
                         
-                        atual_df = get_data("Respostas")
-                        final_df = pd.concat([atual_df, nova_linha], ignore_index=True)
-                        conn.update(worksheet="Respostas", data=final_df)
+                        # Lê o estado atual, anexa e atualiza a planilha
+                        df_atual = get_data("Respostas")
+                        df_final = pd.concat([df_atual, nova_linha], ignore_index=True)
+                        conn.update(worksheet="Respostas", data=df_final)
                         
                         st.balloons()
-                        st.success("✅ GRAVADO COM SUCESSO!")
+                        st.success("✅ AVALIAÇÃO GRAVADA COM SUCESSO!")
                         time.sleep(2)
                         st.rerun()
                     except Exception as e:
