@@ -7,94 +7,93 @@ st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- FUNÇÃO DE LIMPEZA DE CACHE PARA ATUALIZAÇÃO EM TEMPO REAL ---
-def atualizar_dados():
-    try:
-        return conn.read(worksheet="Escalacao", ttl=0)
-    except:
-        st.error("Erro ao acessar a planilha principal.")
-        st.stop()
+def get_data(aba):
+    return conn.read(worksheet=aba, ttl=0)
 
-df_escalacao = atualizar_dados()
+# --- CARREGAMENTO INICIAL ---
+try:
+    df_escalacao = get_data("Escalacao")
+except Exception as e:
+    st.error("Erro: Não foi possível ler a aba 'Escalacao'. Verifique o link no Secrets e o nome da aba.")
+    st.stop()
 
 st.title("🎓 Portal de Avaliação - Afya Marabá")
 
-# --- 1. SEGURANÇA: LOGIN POR E-MAIL ---
+# --- 1. LOGIN POR E-MAIL ---
 email_input = st.text_input("Acesso restrito: Digite seu e-mail cadastrado", placeholder="exemplo@afya.com.br").strip().lower()
 
 if email_input:
-    # Verifica se o e-mail consta na coluna de avaliadores (ou coluna específica de e-mail)
-    # Supondo que a Coluna 0 agora seja o E-mail para segurança
-    if email_input in df_escalacao.iloc[:, 0].str.lower().unique():
-        
-        prof_nome = df_escalacao[df_escalacao.iloc[:, 0].str.lower() == email_input].iloc[0, 1] # Pega o Nome na Coluna B
+    if email_input in df_escalacao['Email'].str.lower().unique():
+        prof_dados = df_escalacao[df_escalacao['Email'].str.lower() == email_input].iloc[0]
+        prof_nome = prof_dados['Avaliador']
         st.success(f"Bem-vindo(a), Prof(a). {prof_nome}!")
 
-        # --- 2. FILTRO DE TRABALHOS PENDENTES ---
+        # --- 2. FILTRAR ALUNOS PENDENTES ---
         try:
-            df_respostas = conn.read(worksheet="Respostas", ttl=0)
-            trabalhos_feitos = df_respostas[df_respostas["Avaliador"] == email_input]["Trabalho"].tolist()
+            df_respostas = get_data("Respostas")
+            # Filtra o que este professor já avaliou baseando-se no grupo de alunos
+            avaliados = df_respostas[df_respostas["Avaliador"] == email_input]["Alunos"].tolist()
         except:
-            trabalhos_feitos = []
+            avaliados = []
 
-        # Filtra trabalhos do professor que ainda não foram avaliados
-        meus_trabalhos = df_escalacao[df_escalacao.iloc[:, 0].str.lower() == email_input]
-        trabalhos_pendentes = meus_trabalhos[~meus_trabalhos["Título"].isin(trabalhos_feitos)]
+        meus_trabalhos = df_escalacao[df_escalacao['Email'].str.lower() == email_input]
+        # Aqui a mágica: o seletor foca nos ALUNOS
+        pendentes = meus_trabalhos[~meus_trabalhos["Alunos"].isin(avaliados)]
 
-        if trabalhos_pendentes.empty:
-            st.info("🎉 Todas as suas bancas foram avaliadas com sucesso!")
+        if pendentes.empty:
+            st.info("🎉 Você concluiu todas as suas avaliações!")
         else:
-            trabalho_selecionado = st.selectbox("Selecione o trabalho pendente:", [""] + trabalhos_pendentes["Título"].tolist())
+            aluno_selecionado = st.selectbox("Selecione o grupo de alunos para avaliar:", [""] + pendentes["Alunos"].tolist())
 
-            if trabalho_selecionado:
-                dados = trabalhos_pendentes[trabalhos_pendentes["Título"] == trabalho_selecionado].iloc[0]
+            if aluno_selecionado:
+                dados = pendentes[pendentes["Alunos"] == aluno_selecionado].iloc[0]
                 
-                # --- 3. TRAVA DE DATA E HORÁRIO ---
-                agora = datetime.now()
-                # Formato esperado na planilha: DD/MM/YYYY e HH:MM
-                data_banca = datetime.strptime(dados['Data'], '%d/%m/%Y').date()
-                hora_banca = datetime.strptime(dados['Horário'], '%H:%M').time()
-                inicio_banca = datetime.combine(data_banca, hora_banca)
+                # --- 3. TRAVA DE DATA/HORÁRIO ---
+                try:
+                    agora = datetime.now()
+                    data_banca = datetime.strptime(str(dados['Data']), '%d/%m/%Y').date()
+                    hora_banca = datetime.strptime(str(dados['Horario']), '%H:%M').time()
+                    inicio = datetime.combine(data_banca, hora_banca)
+                    bloqueado = agora < inicio
+                except:
+                    bloqueado = False
 
-                if agora < inicio_banca:
-                    st.warning(f"⏳ Este trabalho estará disponível para avaliação em {dados['Data']} às {dados['Horário']}.")
+                if bloqueado:
+                    st.warning(f"⏳ Avaliação disponível em {dados['Data']} às {dados['Horario']}.")
                 else:
-                    # --- 4. EXIBIÇÃO ORGANIZADA (ORDEM ALFABÉTICA) ---
-                    st.success(f"📌 **Orientador(a):** {dados['Orientador']}")
+                    st.info(f"📚 **Título:** {dados['Titulo']}")
+                    st.write(f"📌 **Orientador(a):** {dados['Orientador']}")
                     
-                    with st.expander("Ver Acadêmicos do Grupo"):
-                        # Separa nomes por vírgula, limpa espaços e ordena
-                        lista_alunos = sorted([a.strip() for a in str(dados['Alunos']).split(',')])
-                        for i, aluno in enumerate(lista_alunos, 1):
-                            st.write(f"{i}. {aluno}")
-
                     st.divider()
-                    turma = dados['Turma']
+                    
+                    # --- 4. AVALIAÇÃO (PASSO DE 1 PONTO) ---
+                    turma = str(dados['Turma'])
                     notas = {}
                     
-                    # --- 5. RUBRICAS COM STEP DE 1 PONTO ---
-                    st.info(f"Rubrica {turma}")
-                    # Exemplo de loop para TCC I (aplique para as outras conforme antes)
-                    if "TCC I" in turma:
-                        pesos = {"Tema": 3, "Resumo": 1, "Introdução": 5, "Metodologia": 10, "Apresentação": 10, "Coerência": 10, "Qualidade": 9, "Tempo (10-15min)": 2}
-                        for item, p in pesos.items():
-                            # Step=1.0 garante variação de 1 em 1 ponto
-                            notas[item] = st.slider(f"{item} (Até {p} pts)", 0, p, step=1, help="Avaliação em escala inteira.")
+                    if "TCC" in turma:
+                        pesos = {"Tema": 3, "Introdução": 5, "Metodologia": 10, "Apresentação": 10, "Coerência": 10, "Qualidade Visual": 10, "Tempo": 2}
+                    elif "MCM IV" in turma:
+                        pesos = {"Domínio": 5, "Coerência": 5, "Comunicação": 5, "Organização": 5, "Recursos": 5, "Métodos": 5}
+                    else: # MCM V
+                        pesos = {"Resumo": 10, "Introdução": 10, "Metodologia": 10, "Resultados": 20, "Discussão": 10, "Conclusão": 10, "Redação": 10, "Arguição": 10, "Apresentação": 10}
 
-                    # --- 6. FINALIZAÇÃO E RESET AUTOMÁTICO ---
+                    for item, p in pesos.items():
+                        notas[item] = st.slider(f"{item} (Máx: {p})", 0, p, step=1)
+
                     total = sum(notas.values())
-                    st.subheader(f"Nota Final: {total}")
+                    st.subheader(f"Nota Final: {total} pts")
 
-                    if st.button("Finalizar e Enviar Avaliação"):
-                        nova_linha = pd.DataFrame([{
+                    if st.button("Finalizar e Gravar Avaliação"):
+                        nova_resposta = pd.DataFrame([{
                             "Avaliador": email_input,
-                            "Trabalho": trabalho_selecionado,
-                            "Turma": turma,
+                            "Alunos": aluno_selecionado,
+                            "Titulo": dados['Titulo'],
                             "Nota_Final": total
                         }])
-                        conn.create(worksheet="Respostas", data=nova_linha)
+                        
+                        conn.create(worksheet="Respostas", data=nova_resposta)
                         st.balloons()
-                        st.success("Avaliação salva! Atualizando lista...")
-                        st.rerun() # Volta para o início mantendo o login
+                        st.success("Avaliação gravada!")
+                        st.rerun()
     else:
-        st.error("E-mail não autorizado. Por favor, verifique se digitou corretamente ou contate a coordenação.")
+        st.error("E-mail não cadastrado.")
