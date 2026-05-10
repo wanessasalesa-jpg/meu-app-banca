@@ -4,81 +4,136 @@ from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 
+# Conexão com o Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 try:
+    # Lendo a aba de Escalação
     df_escalacao = conn.read(worksheet="Escalacao")
-except:
-    st.error("Erro ao ler a aba 'Escalacao'. Verifique o nome na planilha.")
+except Exception as e:
+    st.error(f"Erro ao ler a aba 'Escalacao'. Verifique se o nome está correto. Erro: {e}")
     st.stop()
 
 st.title("🎓 Portal de Avaliação - Afya Marabá")
 
-# IDENTIFICAÇÃO
+# 1. IDENTIFICAÇÃO DO AVALIADOR
 professores = sorted(df_escalacao.iloc[:, 0].unique())
 professor_logado = st.selectbox("Selecione seu nome:", [""] + list(professores))
 
 if professor_logado:
-    meus_grupos = df_escalacao[df_escalacao["Avaliador"] == professor_logado]
+    # Filtra grupos do professor (Coluna 0 é Avaliador)
+    meus_grupos = df_escalacao[df_escalacao.iloc[:, 0] == professor_logado]
     st.write(f"### Olá, Prof. {professor_logado}!")
     
-    trabalho_selecionado = st.selectbox("Selecione o trabalho:", [""] + meus_grupos["Título"].tolist())
+    # Seleção do Trabalho (Coluna 4 é Título)
+    trabalho_selecionado = st.selectbox("Selecione o trabalho para avaliar:", [""] + meus_grupos.iloc[:, 4].tolist())
 
     if trabalho_selecionado:
-        dados = meus_grupos[meus_grupos["Título"] == trabalho_selecionado].iloc[0]
-        st.success(f"📌 **Orientador(a):** {dados['Orientador']}")
+        # Puxa dados do trabalho selecionado
+        dados = meus_grupos[meus_grupos.iloc[:, 4] == trabalho_selecionado].iloc[0]
+        st.success(f"📌 **Orientador(a):** {dados.iloc[1]}")
         
-        turma = dados['Turma']
-        notas = {}
-        
-        # --- DEFINIÇÃO DE LIMITES ---
-        max_v = 60.0 if "TCC" in turma else (30.0 if "MCM IV" in turma else 100.0)
-        
-        # --- RENDERIZAÇÃO DAS RUBRICAS (Resumo do seu código anterior) ---
-        # (O código aqui mantém suas rubricas de TCC I, II, MCM IV e V com os tempos de 10-15 e 15-20 min)
-        
-        if turma == "TCC I":
-            st.info("Rubrica TCC I (Máx: 60)")
-            itens = {"Tema": 3, "Resumo": 1, "Introdução": 5, "Metodologia": 10, "Apresentação": 10, "Coerência": 10, "Qualidade": 9, "Tempo (10-15min)": 12} # Ajuste os pesos conforme sua ficha
-            # Exemplo simplificado para o loop:
-            for k, p in itens.items():
-                notas[k] = st.slider(f"{k} (Máx: {p})", 0.0, float(p), step=0.1)
+        with st.expander("Ver Detalhes do Grupo"):
+            st.write(f"**Turma:** {dados.iloc[2]}")
+            st.write(f"**Acadêmicos:** {dados.iloc[3]}")
 
-        # ... (Repetir lógica para TCC II, MCM IV e V conforme código anterior)
+        st.divider()
+        turma = str(dados.iloc[2]).upper()
+        notas = {}
+
+        # --- LÓGICA DE RUBRICAS ---
+        if "TCC I" in turma and "TCC II" not in turma:
+            st.info("Rubrica TCC I (Máx: 60 pts)")
+            max_v = 60.0
+            itens = {
+                "Tema": (3.0, "Tema contemporâneo e oportuno."),
+                "Resumo": (1.0, "Objetivos, conclusão e DECS."),
+                "Introdução": (5.0, "Clareza e justificativa."),
+                "Justificativa/Problema": (5.0, "Formatação ABNT e conteúdo."),
+                "Objetivos": (5.0, "Claros e exequíveis."),
+                "Metodologia": (10.0, "Tipo de estudo, amostra e ética."),
+                "Referências": (1.0, "Fontes confiáveis."),
+                "Apresentação Oral": (10.0, "Segurança e domínio."),
+                "Coerência": (10.0, "Coerência fala/texto."),
+                "Qualidade Visual": (9.0, "Material estruturado."),
+                "Tempo": (1.0, "Duração: 10-15 minutos.")
+            }
+            for k, (p, h) in itens.items():
+                notas[k] = st.slider(f"{k} (Máx: {p})", 0.0, float(p), step=0.1, help=h)
+
+        elif "TCC II" in turma:
+            st.info("Rubrica TCC II (Máx: 60 pts)")
+            max_v = 60.0
+            itens = {
+                "Tema/Resumo": (4.0, "Contemporaneidade e DECS."),
+                "Introdução": (5.0, "Clareza e objetivo."),
+                "Metodologia": (5.0, "Rigor e ética."),
+                "Resultados": (5.0, "Responde ao objetivo."),
+                "Discussão/Conclusão": (10.0, "Comparação crítica."),
+                "Referências": (1.0, "Fontes listadas."),
+                "Apresentação Oral": (10.0, "Segurança e domínio."),
+                "Coerência": (10.0, "Fala coerente com texto."),
+                "Qualidade Visual": (9.0, "Material estruturado."),
+                "Tempo": (1.0, "Duração: 15-20 minutos.")
+            }
+            for k, (p, h) in itens.items():
+                notas[k] = st.slider(f"{k} (Máx: {p})", 0.0, float(p), step=0.1, help=h)
+
+        elif "MCM IV" in turma:
+            st.info("Rubrica MCM IV (Máx: 30 pts)")
+            max_v = 30.0
+            crit = {
+                "Domínio": (5.0, "Resposta à banca."),
+                "Coerência": (5.0, "Coerência com o tema."),
+                "Comunicação": (5.0, "Postura e fala."),
+                "Organização/Tempo": (5.0, "Duração: 10-15 min."),
+                "Recursos": (5.0, "Audiovisuais."),
+                "Métodos": (5.0, "Objetivos x Métodos.")
+            }
+            for k, (p, h) in crit.items():
+                notas[k] = st.slider(f"{k} (Máx: {p})", 0.0, float(p), step=0.1, help=h)
+
+        elif "MCM V" in turma:
+            st.info("Rubrica MCM V (Máx: 100 pts)")
+            max_v = 100.0
+            itens = {
+                "Resumo": 10.0, "Introdução": 10.0, "Metodologia": 10.0, 
+                "Resultados": 20.0, "Discussão": 10.0, "Conclusão": 10.0, 
+                "Redação": 10.0, "Arguição": 10.0, "Apresentação": 10.0
+            }
+            for k, p in itens.items():
+                h = "Duração: 15-20 minutos." if k == "Apresentação" else ""
+                notas[k] = st.slider(f"{k} (Máx: {p})", 0.0, float(p), step=0.1, help=h)
 
         st.divider()
         
-        # --- CÁLCULO E ALERTAS VISUAIS ---
+        # --- CÁLCULO E AVISOS ---
         total_banca = sum(notas.values())
-        
-        # 1. Alerta de Nota Baixa (Reprobatória < 60%)
+        st.subheader(f"Nota Final: {total_banca:.2f} / {max_v}")
+
         if total_banca < (max_v * 0.6):
-            st.warning(f"⚠️ Nota Baixa: {total_banca:.2f}. Esta nota é considerada reprobatória.")
-        else:
-            st.info(f"✅ Nota atual: {total_banca:.2f}")
-
-        # 2. Verificação de Itens Zerados
+            st.warning("⚠️ Nota reprobatória (abaixo de 60%).")
+        
         if any(v == 0.0 for v in notas.values()):
-            st.error("❗ Existem critérios com nota 0.0. Certifique-se de que avaliou todos os itens.")
+            st.error("❗ Atenção: Há itens com nota ZERO. Verifique se avaliou tudo.")
 
-        # 3. Trava de Segurança
         if total_banca > max_v:
-            st.error(f"❌ ERRO: A soma ({total_banca:.2f}) ultrapassa o limite da turma ({max_v})!")
+            st.error(f"❌ A nota ({total_banca:.2f}) excede o máximo ({max_v})!")
             pode_salvar = False
         else:
             pode_salvar = True
 
         # --- BOTÃO SALVAR ---
         if st.button("Confirmar e Salvar Avaliação") and pode_salvar:
-            nova_linha = pd.DataFrame([{
-                "Avaliador": professor_logado,
-                "Trabalho": trabalho_selecionado,
-                "Turma": turma,
-                "Nota_Final": total_banca
-            }])
-            # Salva na aba 'Respostas'
-            df_escalacao = conn.read(worksheet="Consolidacao") 
-except Exception as e:
-    st.error(f"Erro ao ler a aba: {e}. Verifique se o nome está correto na planilha.")
-    st.stop()
-            st.success("Avaliação enviada com sucesso!")
+            try:
+                nova_linha = pd.DataFrame([{
+                    "Avaliador": professor_logado,
+                    "Trabalho": trabalho_selecionado,
+                    "Turma": turma,
+                    "Nota_Final": total_banca
+                }])
+                conn.create(worksheet="Respostas", data=nova_linha)
+                st.balloons()
+                st.success("Avaliação salva na aba 'Respostas'!")
+            except Exception as e:
+                st.error(f"Erro ao salvar. Verifique se a aba 'Respostas' existe. Erro: {e}")
