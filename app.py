@@ -77,6 +77,8 @@ if professor_logado:
                 "Nota_Final": total_banca
             }])
             # Salva na aba 'Respostas'
-            conn.create(worksheet="Respostas", data=nova_linha)
-            st.balloons()
+            df_escalacao = conn.read(worksheet="Consolidacao") 
+except Exception as e:
+    st.error(f"Erro ao ler a aba: {e}. Verifique se o nome está correto na planilha.")
+    st.stop()
             st.success("Avaliação enviada com sucesso!")
