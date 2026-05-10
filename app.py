@@ -4,12 +4,28 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import time
 
-# Configuração focada em mobile
+# Configuração focada em mobile e visual limpo
 st.set_page_config(page_title="Avaliação Afya", layout="centered")
 
-# CSS para botões rápidos
+# --- CSS PARA ESCONDER ELEMENTOS DO STREAMLIT (GITHUB E MENU) ---
 st.markdown("""
     <style>
+    /* Esconde o cabeçalho oficial (onde fica o GitHub) */
+    header {visibility: hidden;}
+    
+    /* Esconde o menu de opções do canto inferior direito */
+    #MainMenu {visibility: hidden;}
+    
+    /* Esconde o rodapé 'Made with Streamlit' */
+    footer {visibility: hidden;}
+    
+    /* Ajusta o espaço que sobraria no topo */
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 1rem;
+    }
+
+    /* Estilização dos botões */
     .stButton button {
         width: 100%;
         border-radius: 10px;
@@ -37,12 +53,11 @@ except:
 st.title("🎓 Avaliação de Bancas")
 
 # --- LÓGICA DE MEMÓRIA PERSISTENTE (URL) ---
-# Verifica se já existe um e-mail salvo na sessão ou na URL
 query_params = st.query_params
 if "user" in query_params and "email" not in st.session_state:
     st.session_state.email = query_params["user"]
 
-# --- TELA DE LOGIN (Só aparece se não houver e-mail na memória) ---
+# --- TELA DE LOGIN ---
 if 'email' not in st.session_state:
     st.write("### Identificação")
     email_raw = st.text_input("Digite seu e-mail cadastrado:").strip()
@@ -51,7 +66,6 @@ if 'email' not in st.session_state:
             email_limpo = email_raw.lower()
             if email_limpo in df_escalacao['Email'].str.lower().unique():
                 st.session_state.email = email_limpo
-                # Grava o e-mail na URL para não perder no refresh
                 st.query_params["user"] = email_limpo
                 st.rerun()
             else:
@@ -59,12 +73,10 @@ if 'email' not in st.session_state:
     st.stop()
 
 # --- INTERFACE ---
-# Se chegou aqui, ele já está logado
 try:
     prof_dados = df_escalacao[df_escalacao['Email'].str.lower() == st.session_state.email].iloc[0]
     nome_avaliador = prof_dados['Avaliador']
 except:
-    # Caso o e-mail na URL seja inválido, reseta
     del st.session_state.email
     st.query_params.clear()
     st.rerun()
@@ -74,16 +86,13 @@ with col_user:
     st.write(f"Olá, Prof. {nome_avaliador}")
 with col_exit:
     if st.button("Sair"):
-        # Limpa tudo: sessão e URL
         del st.session_state.email
         st.query_params.clear()
         st.rerun()
 
 st.divider()
 
-# O restante do código de busca de pendentes, trava de horário e rubricas permanece exatamente o mesmo
-# [O código continua com as rubricas TCC I, TCC II e MCM V sem alterações]
-
+# BUSCA DE PENDENTES
 try:
     df_respostas = get_data("Respostas", ttl_sec=0)
     feitos = df_respostas[df_respostas["Email_Avaliador"] == st.session_state.email]["Alunos"].tolist()
@@ -132,8 +141,7 @@ else:
                 st.write("### 📝 Critérios")
                 notas = {}
                 
-                # Rubricas originais preservadas aqui (TCC I, II, MCM V)
-                # ... [Mesmo bloco de rubricas anterior] ...
+                # Rubricas originais (TCC I, II, MCM V)
                 if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
                     rubrica = {"Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse acadêmico."), "Resumo": (1, "Autoexplicativo, objetivos e conclusão condizentes, uso de DECS."), "Introdução": (5, "Clareza, concisão e sequência lógica dos argumentos."), "Justificativa/Problema": (5, "Formatação ABNT e relevância do problema."), "Objetivos": (5, "Claros, exequíveis e condizentes com o tema."), "Metodologia": (10, "Tipo de estudo, população, local, ética e análise de dados."), "Referências": (1, "Fontes confiáveis, atuais e listadas corretamente."), "Apresentação Oral": (10, "Segurança, postura, dicção e domínio do conteúdo."), "Coerência": (10, "Conteúdo da fala em sintonia com o texto escrito."), "Qualidade Visual": (9, "Material visual de apoio bem estruturado e organizado."), "Tempo (10-15min)": (1, "Respeito ao limite de tempo regulamentar.")}
                     nota_max = 60
@@ -167,7 +175,7 @@ else:
                     
                     if sucesso:
                         st.balloons()
-                        st.success("✅ GRAVADO!")
+                        st.success("✅ GRAVADO COM SUCESSO!")
                         time.sleep(2)
                         st.rerun()
 
