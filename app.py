@@ -4,10 +4,10 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import time
 
-# Configuração estável
+# Configuração focada em celular
 st.set_page_config(page_title="Avaliação Afya", layout="centered")
 
-# CSS para botões e layout
+# CSS para botões e visual
 st.markdown("""
     <style>
     .stButton button {
@@ -26,7 +26,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def get_data(aba, ttl_sec=2):
     return conn.read(worksheet=aba, ttl=ttl_sec)
 
-# 1. CARREGAMENTO
+# 1. CARREGAMENTO DOS DADOS
 try:
     df_escalacao = get_data("Escalacao", ttl_sec=300)
 except:
@@ -36,7 +36,7 @@ except:
 
 st.title("🎓 Avaliação de Bancas")
 
-# --- LOGIN ---
+# --- LOGIN (Sempre em minúsculas) ---
 if 'email' not in st.session_state:
     st.write("### Identificação")
     email_raw = st.text_input("Digite seu e-mail cadastrado:").strip()
@@ -50,7 +50,7 @@ if 'email' not in st.session_state:
                 st.error("E-mail não encontrado no cadastro.")
     st.stop()
 
-# --- INTERFACE ---
+# --- INTERFACE PRINCIPAL ---
 prof_dados = df_escalacao[df_escalacao['Email'].str.lower() == st.session_state.email].iloc[0]
 nome_avaliador = prof_dados['Avaliador']
 
@@ -71,89 +71,96 @@ try:
 except:
     feitos = []
 
-# --- LÓGICA DE TRAVA E ORDENAÇÃO ---
+# --- LÓGICA DE TRAVA E FILTRO ---
 agora = datetime.now()
 
 def verificar_liberacao(linha):
     try:
-        # Tenta ler Data e Hora da planilha (Ex: Data: 2026-06-19, Hora: 08:00)
-        data_banca = pd.to_datetime(linha['Data']).date()
-        hora_banca = pd.to_datetime(linha['Hora']).time()
+        # Tenta converter os dados da planilha para data/hora real
+        data_banca = pd.to_datetime(linha['Data'], dayfirst=True).date()
+        hora_banca = pd.to_datetime(linha['Horario']).time() # Verifique se na planilha é 'Hora' ou 'Horario'
         momento_banca = datetime.combine(data_banca, hora_banca)
-        
-        # Libera 15 minutos antes do horário marcado
+        # Libera 15 minutos antes
         return agora >= (momento_banca - timedelta(minutes=15))
     except:
-        return True # Se não tiver data/hora, libera por padrão
+        return True # Se houver erro na data, libera por segurança
 
-# Filtra quem pertence ao professor e ainda não foi feito
+# Filtra o que é do professor e não foi avaliado
 pendentes = df_escalacao[(df_escalacao['Email'].str.lower() == st.session_state.email) & (~df_escalacao['Alunos'].isin(feitos))].copy()
 
-# Aplica a trava de tempo
-pendentes['liberado'] = pendentes.apply(verificar_liberacao, axis=1)
-visiveis = pendentes[pendentes['liberado'] == True].copy()
-
-# Ordena por Data e Hora (quem apresenta antes aparece primeiro)
-if not visiveis.empty:
-    visiveis['ordem_tempo'] = pd.to_datetime(visiveis['Data'].astype(str) + ' ' + visiveis['Hora'].astype(str))
-    visiveis = visiveis.sort_values(by='ordem_tempo')
-
-if visiveis.empty:
-    proximas = pendentes[pendentes['liberado'] == False]
-    if not proximas.empty:
-        st.info("⏳ Você tem bancas agendadas, mas elas só serão liberadas no horário previsto.")
-    else:
-        st.balloons()
-        st.success("🎉 Todas as suas bancas foram concluídas!")
+if pendentes.empty:
+    st.balloons()
+    st.success("🎉 Todas as suas bancas foram concluídas!")
 else:
-    lista_grupos = visiveis["Alunos"].tolist()
-    aluno_selecionado = st.selectbox("🎯 Selecione o Grupo (Ordem de Apresentação):", [""] + lista_grupos)
+    # Aplica a trava de tempo
+    pendentes['liberado'] = pendentes.apply(verificar_liberacao, axis=1)
+    visiveis = pendentes[pendentes['liberado'] == True].copy()
 
-    if aluno_selecionado:
-        dados = visiveis[visiveis["Alunos"] == aluno_selecionado].iloc[0]
-        turma_bruta = str(dados['Turma']).strip().upper()
+    if visiveis.empty:
+        # AQUI ESTÁ O AVISO QUE VOCÊ PEDIU
+        st.warning("⏳ **Acesso bloqueado.**")
+        st.info("Você possui bancas agendadas, mas elas ainda não foram liberadas. O sistema abrirá automaticamente no dia e horário previstos para a sua apresentação.")
+    else:
+        # ORDENAÇÃO POR DATA E HORA (Cronológica)
+        visiveis['ordem_tempo'] = pd.to_datetime(visiveis['Data'].astype(str) + ' ' + visiveis['Horario'].astype(str))
+        visiveis = visiveis.sort_values(by='ordem_tempo')
+        
+        lista_grupos = visiveis["Alunos"].tolist()
+        aluno_selecionado = st.selectbox("🎯 Escolha o Grupo (Ordem de Apresentação):", [""] + lista_grupos)
 
-        with st.expander("📖 Detalhes do Trabalho", expanded=True):
-            st.write(f"**Trabalho:** {turma_bruta}")
-            st.write(f"**Título:** {dados['Titulo']}")
-            st.write(f"**Orientador:** {dados['Orientador']}")
+        if aluno_selecionado:
+            dados = visiveis[visiveis["Alunos"] == aluno_selecionado].iloc[0]
+            turma_bruta = str(dados['Turma']).strip().upper()
 
-        @st.fragment
-        def formulario_avaliacao():
-            st.write("### 📝 Critérios")
-            notas = {}
-            
-            # (Aqui seguem as mesmas regras de rubrica TCC I, II, MCM V já validadas)
-            if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
-                rubrica = {"Tema Contemporâneo": (3, "Explicação..."), "Resumo": (1, "Explicação..."), "Introdução": (5, "Explicação..."), "Justificativa/Problema": (5, "Explicação..."), "Objetivos": (5, "Explicação..."), "Metodologia": (10, "Explicação..."), "Referências": (1, "Explicação..."), "Apresentação Oral": (10, "Explicação..."), "Coerência": (10, "Explicação..."), "Qualidade Visual": (9, "Explicação..."), "Tempo (10-15min)": (1, "Explicação...")}
-                nota_max = 60
-            elif "TCC II" in turma_bruta:
-                rubrica = {"Tema e Resumo": (4, "Contemporaneidade..."), "Introdução": (5, "Justificativa..."), "Metodologia": (5, "Rigor..."), "Resultados": (5, "Descrição..."), "Discussão e Conclusão": (10, "Análise..."), "Referências": (1, "Fontes..."), "Apresentação Oral": (10, "Domínio..."), "Coerência": (10, "Lógica..."), "Qualidade Visual": (9, "Slides..."), "Tempo (15-20min)": (1, "Tempo...")}
-                nota_max = 60
-            elif "MCM V" in turma_bruta:
-                rubrica = {"Resumo": (10, "Síntese"), "Introdução": (10, "Objetivos"), "Metodologia": (10, "Desenho"), "Resultados": (20, "Análise"), "Discussão": (10, "Crítica"), "Conclusão": (10, "Fechamento"), "Redação/ABNT": (10, "Normas"), "Arguição": (10, "Segurança"), "Apresentação": (10, "Domínio")}
-                nota_max = 100
-            else:
-                rubrica = {"Domínio de Conteúdo": (5, "Resposta banca"), "Coerência": (5, "Lógica"), "Comunicação": (5, "Postura"), "Organização/Tempo": (5, "Gestão"), "Recursos Visuais": (5, "Qualidade"), "Métodos": (5, "Adequação")}
-                nota_max = 30
+            with st.expander("📖 Detalhes do Trabalho", expanded=True):
+                st.write(f"**Trabalho:** {turma_bruta}")
+                st.write(f"**Título:** {dados['Titulo']}")
+                st.write(f"**Orientador:** {dados['Orientador']}")
 
-            st.warning(f"**Nota máxima: {nota_max} pts**")
-            for item, (p, help_t) in rubrica.items():
-                notas[item] = st.slider(f"{item} (0-{p})", 0, p, 0, help=help_t, key=f"sld_{item}")
+            @st.fragment
+            def formulario_avaliacao():
+                st.write("### 📝 Critérios")
+                notas = {}
+                
+                # --- LÓGICA DE RUBRICAS ---
+                if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
+                    rubrica = {"Tema Contemporâneo": (3, "Escolha de tema contemporâneo..."), "Resumo": (1, "Autoexplicativo..."), "Introdução": (5, "Clareza..."), "Justificativa/Problema": (5, "ABNT..."), "Objetivos": (5, "Claros..."), "Metodologia": (10, "Tipo de estudo..."), "Referências": (1, "Fontes..."), "Apresentação Oral": (10, "Segurança..."), "Coerência": (10, "Sintonia..."), "Qualidade Visual": (9, "Slides..."), "Tempo (10-15min)": (1, "Limite...")}
+                    nota_max = 60
+                elif "TCC II" in turma_bruta:
+                    rubrica = {"Tema e Resumo": (4, "DECS..."), "Introdução": (5, "Fundamentação..."), "Metodologia": (5, "Ética..."), "Resultados": (5, "Concisão..."), "Discussão e Conclusão": (10, "Crítica..."), "Referências": (1, "Atuais..."), "Apresentação Oral": (10, "Domínio..."), "Coerência": (10, "Lógica..."), "Qualidade Visual": (9, "Leitura..."), "Tempo (15-20min)": (1, "Tempo...")}
+                    nota_max = 60
+                elif "MCM V" in turma_bruta:
+                    rubrica = {"Resumo": (10, "Síntese"), "Introdução": (10, "Objetivos"), "Metodologia": (10, "Desenho"), "Resultados": (20, "Análise"), "Discussão": (10, "Crítica"), "Conclusão": (10, "Fechamento"), "Redação/ABNT": (10, "Normas"), "Arguição": (10, "Segurança"), "Apresentação": (10, "Domínio")}
+                    nota_max = 100
+                else:
+                    rubrica = {"Domínio de Conteúdo": (5, "Banca"), "Coerência": (5, "Lógica"), "Comunicação": (5, "Postura"), "Organização/Tempo": (5, "Gestão"), "Recursos Visuais": (5, "Slides"), "Métodos": (5, "Adequação")}
+                    nota_max = 30
 
-            total = sum(notas.values())
-            st.markdown(f"## Total: {total} / {nota_max}")
+                st.warning(f"**Nota máxima: {nota_max} pts**")
 
-            if st.button("🚀 GRAVAR AVALIAÇÃO"):
-                try:
-                    df_res_atual = conn.read(worksheet="Respostas", ttl=0)
-                    nova_linha = pd.DataFrame([{"Avaliador": nome_avaliador, "Email_Avaliador": st.session_state.email, "Alunos": aluno_selecionado, "Titulo": dados['Titulo'], "Nota_Final": total, "Data_Hora": datetime.now().strftime("%d/%m/%Y %H:%M")}])
-                    df_final = pd.concat([df_res_atual, nova_linha], ignore_index=True)
-                    conn.update(worksheet="Respostas", data=df_final)
-                    st.success("✅ GRAVADO!")
-                    time.sleep(1.5)
-                    st.rerun()
-                except:
-                    st.error("Erro ao gravar. Tente novamente.")
+                for item, (p, help_t) in rubrica.items():
+                    notas[item] = st.slider(f"{item} (0-{p})", 0, p, 0, help=help_t, key=f"sld_{item}")
 
-        formulario_avaliacao()
+                total = sum(notas.values())
+                st.markdown(f"## Total: {total} / {nota_max}")
+
+                if st.button("🚀 GRAVAR AVALIAÇÃO"):
+                    try:
+                        df_res_atual = conn.read(worksheet="Respostas", ttl=0)
+                        nova_linha = pd.DataFrame([{
+                            "Avaliador": nome_avaliador, 
+                            "Email_Avaliador": st.session_state.email,
+                            "Alunos": aluno_selecionado, 
+                            "Titulo": dados['Titulo'], 
+                            "Nota_Final": total,
+                            "Data_Hora": datetime.now().strftime("%d/%m/%Y %H:%M")
+                        }])
+                        df_final = pd.concat([df_res_atual, nova_linha], ignore_index=True)
+                        conn.update(worksheet="Respostas", data=df_final)
+                        st.success("✅ GRAVADO!")
+                        time.sleep(1)
+                        st.rerun()
+                    except:
+                        st.error("Erro na conexão.")
+
+            formulario_avaliacao()
