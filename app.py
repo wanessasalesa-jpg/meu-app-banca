@@ -16,7 +16,7 @@ except:
 st.title("🎓 Portal de Avaliação - Afya Marabá")
 
 # 1. IDENTIFICAÇÃO DO AVALIADOR
-professores = sorted(df_escalacao["Avaliador"].unique())
+professores = sorted(df_escalacao.iloc[:, 0].unique())
 professor_logado = st.selectbox("Selecione seu nome:", [""] + list(professores))
 
 if professor_logado:
