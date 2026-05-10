@@ -8,7 +8,7 @@ st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 try:
-    df_escalacao = conn.read(worksheet="Escalacao")
+    df_escalacao = conn.read()
 except:
     st.error("Erro ao ler a aba 'Escalacao'. Verifique o nome na sua planilha.")
     st.stop()
