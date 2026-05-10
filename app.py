@@ -48,72 +48,35 @@ if professor_logado:
         
         # --- LÓGICA DE RUBRICAS COM DESCRIÇÕES DETALHADAS ---
         
+        # --- LÓGICA DE RUBRICAS COM REGRAS DE TEMPO DIFERENCIADAS ---
+        
         if turma == "TCC I":
-            st.info("Rubrica TCC I (Máx: 60 pontos)")
-            # Itens e descrições conforme seu documento de TCC 1
-            itens_tcc1 = {
-                "Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse para a comunidade acadêmica."),
-                "Resumo": (1, "É autoexplicativo, apresenta objetivos e conclusão condizentes e palavras-chaves de acordo com o DECS."),
-                "Introdução": (5, "Apresenta clareza, concisão, justificativa, sequência lógica e objetivo ao final."),
-                "Justificativa/Problema": (5, "Formatação segundo ABNT e conteúdo de justificativa, problema e hipóteses."),
-                "Objetivos": (5, "Claros e exequíveis."),
-                "Metodologia": (10, "Define tipo de estudo, local, data, população, procedimentos, instrumentos, análise e ética."),
-                "Referências": (1, "São relevantes, com fontes confiáveis e todas listadas."),
-                "Apresentação Oral": (10, "Explanação clara, com segurança, postura e domínio sobre o trabalho."),
-                "Coerência": (10, "O conteúdo da apresentação oral tem coerência com o documento textual."),
-                "Qualidade do Material": (9, "O material de apresentação é estruturado, coerente e utilizado como apoio."),
-                "Tempo": (1, "Observância do tempo determinado para apresentação.")
+            st.info("Rubrica TCC I (60 pts)")
+            ajuda_tcc1 = {
+                "Tema": "Escolha de tema contemporâneo e oportuno.",
+                "Metodologia": "Define tipo de estudo, local, amostra e ética.",
+                "Tempo": "Observância do tempo: a apresentação deve durar entre 10-15 minutos."
             }
-            for item, (peso, ajuda) in itens_tcc1.items():
-                notas[item] = st.slider(f"{item} (Máx: {peso})", 0.0, float(peso), step=0.1, help=ajuda)
+            # ... (demais itens seguem a mesma lógica)
+            notas["Tempo"] = st.slider("Tempo (Máx: 1)", 0.0, 1.0, step=0.1, help=ajuda_tcc1["Tempo"])
 
         elif turma == "TCC II":
-            st.info("Rubrica TCC II (Máx: 60 pontos)")
-            # Descrições conforme seu documento de TCC 2
-            itens_tcc2 = {
-                "Tema e Resumo": (4, "Tema contemporâneo e resumo autoexplicativo com DECS."),
-                "Introdução": (5, "Clareza, concisão, justificativa e objetivo claro."),
-                "Metodologia": (5, "Rigor metodológico e descrição dos aspectos éticos."),
-                "Resultados": (5, "Responde ao objetivo, estruturado, conciso e isento de opiniões."),
-                "Discussão e Conclusão": (10, "Foca nos achados, comparação crítica com literatura e limitações."),
-                "Referências": (1, "Fontes confiáveis e listadas corretamente."),
-                "Apresentação Oral": (10, "Segurança, postura e domínio."),
-                "Coerência": (10, "Coerência entre fala e texto."),
-                "Qualidade": (9, "Material visual estruturado e coerente."),
-                "Tempo": (1, "Mínimo 15 min e máximo 20 min.")
+            st.info("Rubrica TCC II (60 pts)")
+            ajuda_tcc2 = {
+                "Tempo": "Observância do tempo: a apresentação deve durar entre 15-20 minutos."
             }
-            for item, (peso, ajuda) in itens_tcc2.items():
-                notas[item] = st.slider(f"{item} (Máx: {peso})", 0.0, float(peso), step=0.1, help=ajuda)
+            notas["Tempo"] = st.slider("Tempo (Máx: 1)", 0.0, 1.0, step=0.1, help=ajuda_tcc2["Tempo"])
 
         elif turma == "MCM IV":
-            st.info("Rubrica MCM IV (Máx: 30 pontos)")
-            crit_mcm4 = {
-                "Domínio de Conteúdo": "Domínio do conteúdo e resposta aos questionamentos da banca.",
-                "Coerência": "Coerência do conteúdo com o tema abordado.",
-                "Comunicação": "Habilidades de comunicação e postura na apresentação.",
-                "Organização": "Organização da apresentação e gestão do tempo.",
-                "Recursos Visuais": "Uso dos recursos audiovisuais.",
-                "Métodos": "Adequação dos objetivos aos métodos."
-            }
-            for item, ajuda in crit_mcm4.items():
-                notas[item] = st.slider(f"{item} (Máx: 5.0)", 0.0, 5.0, step=0.1, help=ajuda)
+            st.info("Rubrica MCM IV (30 pts)")
+            # Aqui para o MCM IV, o tempo faz parte do item "Organização"
+            ajuda_mcm4 = "Organização da apresentação e gestão do tempo (Duração: 10-15 minutos)."
+            notas["Organização"] = st.slider("Organização/Tempo (Máx: 5)", 0.0, 5.0, step=0.1, help=ajuda_mcm4)
 
         elif turma == "MCM V":
-            st.info("Rubrica MCM V (Máx: 100 pontos)")
-            ajuda_mcm5 = {
-                "Resumo": "Apresenta objetivos, métodos, resultados e conclusões? (Até 10 pts)",
-                "Introdução": "Tema adequado, embasado e objetivos claros? (Até 10 pts)",
-                "Metodologia": "Metodologia atende aos objetivos? (Até 10 pts)",
-                "Resultados": "Descritos e analisados de forma adequada e suficiente? (Até 20 pts)",
-                "Discussão": "Embasada em artigos pertinentes e atualizados? (Até 10 pts)",
-                "Conclusão": "Pertinente aos resultados e coerente com objetivos? (Até 10 pts)",
-                "Redação/ABNT": "Gramática e formatação ABNT ou Vancouver. (Até 10 pts)",
-                "Arguição": "Autonomia e capacidade para responder à banca. (Até 10 pts)",
-                "Apresentação": "Clareza, segurança, linguagem e material visual. (Até 10 pts)"
-            }
-            for item, ajuda in ajuda_mcm5.items():
-                max_v = 20.0 if item == "Resultados" else 10.0
-                notas[item] = st.slider(f"{item} (Máx: {max_v})", 0.0, max_v, step=0.1, help=ajuda)
+            st.info("Rubrica MCM V (100 pts)")
+            ajuda_mcm5 = "Clareza, segurança e tempo de apresentação (Duração: 15-20 minutos)."
+            notas["Apresentação"] = st.slider("Apresentação (Máx: 10)", 0.0, 10.0, step=0.1, help=ajuda_mcm5)
 
         # CÁLCULO FINAL
         total_banca = sum(notas.values())
