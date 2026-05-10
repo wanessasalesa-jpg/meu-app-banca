@@ -6,13 +6,13 @@ import time
 
 st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 
-# --- CONEXÃO COM CACHE PARA EVITAR ERROS ---
+# --- CONEXÃO COM CACHE ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data(aba, tempo_cache=120):
     return conn.read(worksheet=aba, ttl=tempo_cache)
 
-# 1. CARREGAMENTO INICIAL
+# 1. CARREGAMENTO
 try:
     df_escalacao = get_data("Escalacao", tempo_cache=300)
 except Exception as e:
@@ -25,22 +25,24 @@ email_input = st.text_input("Acesso restrito: Digite seu e-mail", placeholder="e
 
 if email_input:
     if email_input in df_escalacao['Email'].str.lower().unique():
+        # AQUI BUSCAMOS O NOME DO PROFESSOR PARA USAR NO SALVAMENTO
         prof_dados = df_escalacao[df_escalacao['Email'].str.lower() == email_input].iloc[0]
-        st.success(f"Bem-vindo(a), Prof(a). {prof_dados['Avaliador']}!")
+        nome_avaliador = prof_dados['Avaliador']
+        
+        st.success(f"Bem-vindo(a), Prof(a). {nome_avaliador}!")
 
         try:
             df_respostas = get_data("Respostas", tempo_cache=10)
-            feitos = df_respostas[df_respostas["Avaliador"] == email_input]["Alunos"].tolist()
+            # O sistema verifica quem já avaliou pelo e-mail (que é único)
+            feitos = df_respostas[df_respostas["Email_Avaliador"] == email_input]["Alunos"].tolist()
         except:
             feitos = []
 
-        # FILTRO DE PENDENTES
         pendentes = df_escalacao[(df_escalacao['Email'].str.lower() == email_input) & (~df_escalacao['Alunos'].isin(feitos))]
 
         if pendentes.empty:
             st.info("🎉 Todas as suas avaliações foram concluídas!")
         else:
-            # --- LISTA EM ORDEM ALFABÉTICA ---
             lista_grupos = sorted(pendentes["Alunos"].tolist())
             aluno_selecionado = st.selectbox("Selecione o grupo de alunos:", [""] + lista_grupos)
 
@@ -48,7 +50,7 @@ if email_input:
                 dados = pendentes[pendentes["Alunos"] == aluno_selecionado].iloc[0]
                 turma_bruta = str(dados['Turma']).strip().upper()
                 
-                # --- DEFINIÇÃO DE RUBRICAS (FIXADAS) ---
+                # --- RUBRICAS (MANTIDAS EXATAMENTE COMO APROVADO) ---
                 notas = {}
                 if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
                     rubrica = {
@@ -114,15 +116,20 @@ if email_input:
 
                 if st.button("Confirmar e Gravar Avaliação"):
                     try:
+                        # AGORA SALVAMOS O NOME DO AVALIADOR E O E-MAIL
                         nova_linha = pd.DataFrame([{
-                            "Avaliador": email_input, 
+                            "Avaliador": nome_avaliador, 
+                            "Email_Avaliador": email_input,
                             "Alunos": aluno_selecionado, 
                             "Titulo": dados['Titulo'], 
-                            "Nota_Final": total
+                            "Nota_Final": total,
+                            "Data_Hora": datetime.now().strftime("%d/%m/%Y %H:%M")
                         }])
+                        
                         df_atual = conn.read(worksheet="Respostas", ttl=0)
                         df_final = pd.concat([df_atual, nova_linha], ignore_index=True)
                         conn.update(worksheet="Respostas", data=df_final)
+                        
                         st.balloons()
                         st.success("✅ GRAVADO COM SUCESSO!")
                         time.sleep(2)
