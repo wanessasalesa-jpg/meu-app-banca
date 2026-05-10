@@ -13,7 +13,6 @@ try:
     df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
 except Exception as e:
     st.error(f"Erro de conexão detectado: {e}")
-    st.info("💡 Verifique se o e-mail da 'Service Account' (client_email) foi adicionado à planilha como EDITOR.")
     st.stop()
 
 st.title("🎓 Portal de Avaliação - Afya Marabá")
