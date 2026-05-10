@@ -48,7 +48,6 @@ if professor_logado:
         
         if turma == "TCC I":
             st.info("Rubrica TCC I (Máx: 60 pontos)")
-            # Itens e descrições conforme seu documento de TCC 1
             itens_tcc1 = {
                 "Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse para a comunidade acadêmica."),
                 "Resumo": (1, "É autoexplicativo, apresenta objetivos e conclusão condizentes e palavras-chaves de acordo com o DECS."),
@@ -60,14 +59,13 @@ if professor_logado:
                 "Apresentação Oral": (10, "Explanação clara, com segurança, postura e domínio sobre o trabalho."),
                 "Coerência": (10, "O conteúdo da apresentação oral tem coerência com o documento textual."),
                 "Qualidade do Material": (9, "O material de apresentação é estruturado, coerente e utilizado como apoio."),
-                "Tempo": (1, "Observância do tempo determinado para apresentação.")
+                "Tempo": (1, "Duração permitida: entre 10 e 15 minutos.")
             }
             for item, (peso, ajuda) in itens_tcc1.items():
                 notas[item] = st.slider(f"{item} (Máx: {peso})", 0.0, float(peso), step=0.1, help=ajuda)
 
         elif turma == "TCC II":
             st.info("Rubrica TCC II (Máx: 60 pontos)")
-            # Descrições conforme seu documento de TCC 2
             itens_tcc2 = {
                 "Tema e Resumo": (4, "Tema contemporâneo e resumo autoexplicativo com DECS."),
                 "Introdução": (5, "Clareza, concisão, justificativa e objetivo claro."),
@@ -78,7 +76,7 @@ if professor_logado:
                 "Apresentação Oral": (10, "Segurança, postura e domínio."),
                 "Coerência": (10, "Coerência entre fala e texto."),
                 "Qualidade": (9, "Material visual estruturado e coerente."),
-                "Tempo": (1, "Mínimo 15 min e máximo 20 min.")
+                "Tempo": (1, "Duração permitida: entre 15 e 20 minutos.")
             }
             for item, (peso, ajuda) in itens_tcc2.items():
                 notas[item] = st.slider(f"{item} (Máx: {peso})", 0.0, float(peso), step=0.1, help=ajuda)
@@ -89,7 +87,7 @@ if professor_logado:
                 "Domínio de Conteúdo": "Domínio do conteúdo e resposta aos questionamentos da banca.",
                 "Coerência": "Coerência do conteúdo com o tema abordado.",
                 "Comunicação": "Habilidades de comunicação e postura na apresentação.",
-                "Organização": "Organização da apresentação e gestão do tempo.",
+                "Organização": "Organização da apresentação e gestão do tempo (Duração: 10-15 minutos).",
                 "Recursos Visuais": "Uso dos recursos audiovisuais.",
                 "Métodos": "Adequação dos objetivos aos métodos."
             }
@@ -107,7 +105,7 @@ if professor_logado:
                 "Conclusão": "Pertinente aos resultados e coerente com objetivos? (Até 10 pts)",
                 "Redação/ABNT": "Gramática e formatação ABNT ou Vancouver. (Até 10 pts)",
                 "Arguição": "Autonomia e capacidade para responder à banca. (Até 10 pts)",
-                "Apresentação": "Clareza, segurança, linguagem e material visual. (Até 10 pts)"
+                "Apresentação": "Clareza, segurança e tempo (Duração: 15-20 minutos)."
             }
             for item, ajuda in ajuda_mcm5.items():
                 max_v = 20.0 if item == "Resultados" else 10.0
@@ -118,6 +116,5 @@ if professor_logado:
         st.subheader(f"Nota Final: {total_banca:.2f}")
 
         if st.button("Confirmar e Salvar Avaliação"):
-            # Aqui você conectará a função de salvar na planilha
             st.balloons()
-            st.success("Avaliação salva com sucesso! Os dados foram enviados para a planilha mestre.")
+            st.success("Avaliação salva com sucesso!")
