@@ -1,120 +1,100 @@
 import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
+from datetime import datetime
 
 st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 
-# Conexão com o Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-try:
-    df_escalacao = conn.read()
-except:
-    st.error("Erro ao ler a aba 'Escalacao'. Verifique o nome na sua planilha.")
-    st.stop()
+# --- FUNÇÃO DE LIMPEZA DE CACHE PARA ATUALIZAÇÃO EM TEMPO REAL ---
+def atualizar_dados():
+    try:
+        return conn.read(worksheet="Escalacao", ttl=0)
+    except:
+        st.error("Erro ao acessar a planilha principal.")
+        st.stop()
+
+df_escalacao = atualizar_dados()
 
 st.title("🎓 Portal de Avaliação - Afya Marabá")
 
-# 1. IDENTIFICAÇÃO DO AVALIADOR
-professores = sorted(df_escalacao.iloc[:, 0].unique())
-professor_logado = st.selectbox("Selecione seu nome:", [""] + list(professores))
+# --- 1. SEGURANÇA: LOGIN POR E-MAIL ---
+email_input = st.text_input("Acesso restrito: Digite seu e-mail cadastrado", placeholder="exemplo@afya.com.br").strip().lower()
 
-if professor_logado:
-    # Filtra apenas os grupos deste professor
-    meus_grupos = df_escalacao[df_escalacao["Avaliador"] == professor_logado]
-    
-    st.write(f"### Olá, Prof. {professor_logado}!")
-    st.write(f"Você tem **{len(meus_grupos)}** bancas agendadas.")
-
-    # 2. SELEÇÃO DO GRUPO
-    trabalho_selecionado = st.selectbox("Selecione o trabalho para avaliar:", 
-                                        [""] + meus_grupos["Título"].tolist())
-
-    if trabalho_selecionado:
-        dados = meus_grupos[meus_grupos["Título"] == trabalho_selecionado].iloc[0]
+if email_input:
+    # Verifica se o e-mail consta na coluna de avaliadores (ou coluna específica de e-mail)
+    # Supondo que a Coluna 0 agora seja o E-mail para segurança
+    if email_input in df_escalacao.iloc[:, 0].str.lower().unique():
         
-        # CABEÇALHO COM RECONHECIMENTO DO ORIENTADOR
-        st.success(f"📌 **Orientador(a):** {dados['Orientador']}")
-        with st.expander("Ver Detalhes do Grupo"):
-            st.write(f"**Turma:** {dados['Turma']}")
-            st.write(f"**Acadêmicos:** {dados['Alunos']}")
-            st.write(f"**Horário:** {dados['Horário']}")
+        prof_nome = df_escalacao[df_escalacao.iloc[:, 0].str.lower() == email_input].iloc[0, 1] # Pega o Nome na Coluna B
+        st.success(f"Bem-vindo(a), Prof(a). {prof_nome}!")
 
-        st.divider()
-        turma = dados['Turma']
-        notas = {}
-        
-        # --- LÓGICA DE RUBRICAS COM DESCRIÇÕES DETALHADAS ---
-        
-        if turma == "TCC I":
-            st.info("Rubrica TCC I (Máx: 60 pontos)")
-            itens_tcc1 = {
-                "Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse para a comunidade acadêmica."),
-                "Resumo": (1, "É autoexplicativo, apresenta objetivos e conclusão condizentes e palavras-chaves de acordo com o DECS."),
-                "Introdução": (5, "Apresenta clareza, concisão, justificativa, sequência lógica e objetivo ao final."),
-                "Justificativa/Problema": (5, "Formatação segundo ABNT e conteúdo de justificativa, problema e hipóteses."),
-                "Objetivos": (5, "Claros e exequíveis."),
-                "Metodologia": (10, "Define tipo de estudo, local, data, população, procedimentos, instrumentos, análise e ética."),
-                "Referências": (1, "São relevantes, com fontes confiáveis e todas listadas."),
-                "Apresentação Oral": (10, "Explanação clara, com segurança, postura e domínio sobre o trabalho."),
-                "Coerência": (10, "O conteúdo da apresentação oral tem coerência com o documento textual."),
-                "Qualidade do Material": (9, "O material de apresentação é estruturado, coerente e utilizado como apoio."),
-                "Tempo": (1, "Duração permitida: entre 10 e 15 minutos.")
-            }
-            for item, (peso, ajuda) in itens_tcc1.items():
-                notas[item] = st.slider(f"{item} (Máx: {peso})", 0.0, float(peso), step=0.1, help=ajuda)
+        # --- 2. FILTRO DE TRABALHOS PENDENTES ---
+        try:
+            df_respostas = conn.read(worksheet="Respostas", ttl=0)
+            trabalhos_feitos = df_respostas[df_respostas["Avaliador"] == email_input]["Trabalho"].tolist()
+        except:
+            trabalhos_feitos = []
 
-        elif turma == "TCC II":
-            st.info("Rubrica TCC II (Máx: 60 pontos)")
-            itens_tcc2 = {
-                "Tema e Resumo": (4, "Tema contemporâneo e resumo autoexplicativo com DECS."),
-                "Introdução": (5, "Clareza, concisão, justificativa e objetivo claro."),
-                "Metodologia": (5, "Rigor metodológico e descrição dos aspectos éticos."),
-                "Resultados": (5, "Responde ao objetivo, estruturado, conciso e isento de opiniões."),
-                "Discussão e Conclusão": (10, "Foca nos achados, comparação crítica com literatura e limitações."),
-                "Referências": (1, "Fontes confiáveis e listadas corretamente."),
-                "Apresentação Oral": (10, "Segurança, postura e domínio."),
-                "Coerência": (10, "Coerência entre fala e texto."),
-                "Qualidade": (9, "Material visual estruturado e coerente."),
-                "Tempo": (1, "Duração permitida: entre 15 e 20 minutos.")
-            }
-            for item, (peso, ajuda) in itens_tcc2.items():
-                notas[item] = st.slider(f"{item} (Máx: {peso})", 0.0, float(peso), step=0.1, help=ajuda)
+        # Filtra trabalhos do professor que ainda não foram avaliados
+        meus_trabalhos = df_escalacao[df_escalacao.iloc[:, 0].str.lower() == email_input]
+        trabalhos_pendentes = meus_trabalhos[~meus_trabalhos["Título"].isin(trabalhos_feitos)]
 
-        elif turma == "MCM IV":
-            st.info("Rubrica MCM IV (Máx: 30 pontos)")
-            crit_mcm4 = {
-                "Domínio de Conteúdo": "Domínio do conteúdo e resposta aos questionamentos da banca.",
-                "Coerência": "Coerência do conteúdo com o tema abordado.",
-                "Comunicação": "Habilidades de comunicação e postura na apresentação.",
-                "Organização": "Organização da apresentação e gestão do tempo (Duração: 10-15 minutos).",
-                "Recursos Visuais": "Uso dos recursos audiovisuais.",
-                "Métodos": "Adequação dos objetivos aos métodos."
-            }
-            for item, ajuda in crit_mcm4.items():
-                notas[item] = st.slider(f"{item} (Máx: 5.0)", 0.0, 5.0, step=0.1, help=ajuda)
+        if trabalhos_pendentes.empty:
+            st.info("🎉 Todas as suas bancas foram avaliadas com sucesso!")
+        else:
+            trabalho_selecionado = st.selectbox("Selecione o trabalho pendente:", [""] + trabalhos_pendentes["Título"].tolist())
 
-        elif turma == "MCM V":
-            st.info("Rubrica MCM V (Máx: 100 pontos)")
-            ajuda_mcm5 = {
-                "Resumo": "Apresenta objetivos, métodos, resultados e conclusões? (Até 10 pts)",
-                "Introdução": "Tema adequado, embasado e objetivos claros? (Até 10 pts)",
-                "Metodologia": "Metodologia atende aos objetivos? (Até 10 pts)",
-                "Resultados": "Descritos e analisados de forma adequada e suficiente? (Até 20 pts)",
-                "Discussão": "Embasada em artigos pertinentes e atualizados? (Até 10 pts)",
-                "Conclusão": "Pertinente aos resultados e coerente com objetivos? (Até 10 pts)",
-                "Redação/ABNT": "Gramática e formatação ABNT ou Vancouver. (Até 10 pts)",
-                "Arguição": "Autonomia e capacidade para responder à banca. (Até 10 pts)",
-                "Apresentação": "Clareza, segurança e tempo (Duração: 15-20 minutos)."
-            }
-            for item, ajuda in ajuda_mcm5.items():
-                max_v = 20.0 if item == "Resultados" else 10.0
-                notas[item] = st.slider(f"{item} (Máx: {max_v})", 0.0, max_v, step=0.1, help=ajuda)
+            if trabalho_selecionado:
+                dados = trabalhos_pendentes[trabalhos_pendentes["Título"] == trabalho_selecionado].iloc[0]
+                
+                # --- 3. TRAVA DE DATA E HORÁRIO ---
+                agora = datetime.now()
+                # Formato esperado na planilha: DD/MM/YYYY e HH:MM
+                data_banca = datetime.strptime(dados['Data'], '%d/%m/%Y').date()
+                hora_banca = datetime.strptime(dados['Horário'], '%H:%M').time()
+                inicio_banca = datetime.combine(data_banca, hora_banca)
 
-        # CÁLCULO FINAL
-        total_banca = sum(notas.values())
-        st.subheader(f"Nota Final: {total_banca:.2f}")
+                if agora < inicio_banca:
+                    st.warning(f"⏳ Este trabalho estará disponível para avaliação em {dados['Data']} às {dados['Horário']}.")
+                else:
+                    # --- 4. EXIBIÇÃO ORGANIZADA (ORDEM ALFABÉTICA) ---
+                    st.success(f"📌 **Orientador(a):** {dados['Orientador']}")
+                    
+                    with st.expander("Ver Acadêmicos do Grupo"):
+                        # Separa nomes por vírgula, limpa espaços e ordena
+                        lista_alunos = sorted([a.strip() for a in str(dados['Alunos']).split(',')])
+                        for i, aluno in enumerate(lista_alunos, 1):
+                            st.write(f"{i}. {aluno}")
 
-        if st.button("Confirmar e Salvar Avaliação"):
-            st.balloons()
-            st.success("Avaliação salva com suces
+                    st.divider()
+                    turma = dados['Turma']
+                    notas = {}
+                    
+                    # --- 5. RUBRICAS COM STEP DE 1 PONTO ---
+                    st.info(f"Rubrica {turma}")
+                    # Exemplo de loop para TCC I (aplique para as outras conforme antes)
+                    if "TCC I" in turma:
+                        pesos = {"Tema": 3, "Resumo": 1, "Introdução": 5, "Metodologia": 10, "Apresentação": 10, "Coerência": 10, "Qualidade": 9, "Tempo (10-15min)": 2}
+                        for item, p in pesos.items():
+                            # Step=1.0 garante variação de 1 em 1 ponto
+                            notas[item] = st.slider(f"{item} (Até {p} pts)", 0, p, step=1, help="Avaliação em escala inteira.")
+
+                    # --- 6. FINALIZAÇÃO E RESET AUTOMÁTICO ---
+                    total = sum(notas.values())
+                    st.subheader(f"Nota Final: {total}")
+
+                    if st.button("Finalizar e Enviar Avaliação"):
+                        nova_linha = pd.DataFrame([{
+                            "Avaliador": email_input,
+                            "Trabalho": trabalho_selecionado,
+                            "Turma": turma,
+                            "Nota_Final": total
+                        }])
+                        conn.create(worksheet="Respostas", data=nova_linha)
+                        st.balloons()
+                        st.success("Avaliação salva! Atualizando lista...")
+                        st.rerun() # Volta para o início mantendo o login
+    else:
+        st.error("E-mail não autorizado. Por favor, verifique se digitou corretamente ou contate a coordenação.")
