@@ -34,16 +34,15 @@ if email_input:
         except:
             feitos = []
 
+        # Filtrar trabalhos que o professor ainda não avaliou
         pendentes = df_escalacao[(df_escalacao['Email'].str.lower() == email_input) & (~df_escalacao['Alunos'].isin(feitos))]
 
         if pendentes.empty:
-            st.info("🎉 Todas as avaliações foram concluídas!")
+            st.info("🎉 Todas as suas avaliações foram concluídas!")
         else:
-            aluno_selecionado = st.selectbox("Selecione o grupo de alunos:", [""] + pendentes["Alunos"].tolist())
-
-            if aluno_selecionado:
-                dados = pendentes[pendentes["Alunos"] == aluno_selecionado].iloc[0]
-                turma_bruta = str(dados['Turma']).strip().upper()
+            # ORGANIZAR POR ORDEM ALFABÉTICA AQUI
+            lista_alfabetica = sorted(pendentes["Alunos"].tolist())
+            aluno_selecionado = st.selectbox("Selecione o grupo de alunos:", [""] + lista_alfabetica)
                 
                 # --- DEFINIÇÃO DE RUBRICAS (MANTIDAS EXATAMENTE COMO APROVADO) ---
                 notas = {}
