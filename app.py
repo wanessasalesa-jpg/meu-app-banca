@@ -5,16 +5,15 @@ from datetime import datetime
 
 st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-def get_data(aba):
-    return conn.read(worksheet=aba, ttl=0)
-
-# --- 1. CARREGAMENTO ---
+# --- TENTATIVA DE CONEXÃO DIRETA ---
 try:
-    df_escalacao = get_data("Escalacao")
+    # Se os Secrets estiverem funcionando, ele usa. 
+    # Se não, ele tentará ler as chaves que você configurou.
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
 except Exception as e:
-    st.error("Erro de conexão com a planilha.")
+    st.error(f"Erro de conexão detectado: {e}")
+    st.info("💡 Verifique se o e-mail da 'Service Account' (client_email) foi adicionado à planilha como EDITOR.")
     st.stop()
 
 st.title("🎓 Portal de Avaliação - Afya Marabá")
