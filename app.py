@@ -7,7 +7,7 @@ import time
 # Configuração estável
 st.set_page_config(page_title="Avaliação Afya", layout="centered")
 
-# CSS para estabilizar o layout e botões
+# CSS para estabilizar layout e botões
 st.markdown("""
     <style>
     .stSlider { margin-bottom: 20px; }
@@ -19,7 +19,6 @@ st.markdown("""
         color: white;
         font-weight: bold;
     }
-    /* Esconde o menu do Streamlit para evitar distrações */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     </style>
@@ -34,28 +33,31 @@ def get_data(aba, ttl_sec=2):
 try:
     df_escalacao = get_data("Escalacao", ttl_sec=300)
 except:
-    st.error("Conectando...")
+    st.error("Conectando ao banco de dados...")
     time.sleep(1)
     st.rerun()
 
 st.title("🎓 Avaliação de Bancas")
 
-# --- LOGIN ---
+# --- LOGIN (Com correção de maiúsculas automática) ---
 if 'email' not in st.session_state:
     st.write("### Identificação")
-    email_input = st.text_input("Digite seu e-mail cadastrado:").strip().lower()
+    # O .lower() aqui garante que a entrada seja sempre minúscula internamente
+    email_raw = st.text_input("Digite seu e-mail cadastrado:").strip()
     if st.button("Acessar Sistema"):
-        if email_input in df_escalacao['Email'].str.lower().unique():
-            st.session_state.email = email_input
-            st.rerun()
-        else:
-            st.error("E-mail não encontrado.")
+        if email_raw:
+            email_limpo = email_raw.lower()
+            if email_limpo in df_escalacao['Email'].str.lower().unique():
+                st.session_state.email = email_limpo
+                st.rerun()
+            else:
+                st.error("E-mail não encontrado no cadastro.")
     st.stop()
 
 # --- INTERFACE ---
 prof_dados = df_escalacao[df_escalacao['Email'].str.lower() == st.session_state.email].iloc[0]
 nome_avaliador = prof_dados['Avaliador']
-st.write(f"Olá, **Prof. {nome_avaliador}**")
+st.write(f"Olá, Prof. {nome_avaliador}") # Removido os asteriscos
 st.divider()
 
 try:
@@ -77,16 +79,17 @@ else:
         dados = pendentes[pendentes["Alunos"] == aluno_selecionado].iloc[0]
         turma_bruta = str(dados['Turma']).strip().upper()
 
-        with st.expander("📖 Detalhes do Trabalho"):
+        with st.expander("📖 Detalhes do Trabalho", expanded=True):
+            st.write(f"**Trabalho:** {turma_bruta}") # Turma adicionada aqui
             st.write(f"**Título:** {dados['Titulo']}")
             st.write(f"**Orientador:** {dados['Orientador']}")
 
-        # --- FRAGMENTO PARA EVITAR TREMORES ---
         @st.fragment
         def formulario_avaliacao():
             st.write("### 📝 Critérios")
             
             notas = {}
+            # Lógica de rubricas mantida
             if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
                 rubrica = {
                     "Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse acadêmico."),
@@ -150,6 +153,9 @@ else:
 
             if st.button("🚀 GRAVAR AVALIAÇÃO"):
                 try:
+                    # Captura dados atuais antes de salvar
+                    df_res_atual = conn.read(worksheet="Respostas", ttl=0)
+                    
                     nova_linha = pd.DataFrame([{
                         "Avaliador": nome_avaliador, 
                         "Email_Avaliador": st.session_state.email,
@@ -158,14 +164,14 @@ else:
                         "Nota_Final": total,
                         "Data_Hora": datetime.now().strftime("%d/%m/%Y %H:%M")
                     }])
-                    df_atual = conn.read(worksheet="Respostas", ttl=0)
-                    df_final = pd.concat([df_atual, nova_linha], ignore_index=True)
+                    
+                    df_final = pd.concat([df_res_atual, nova_linha], ignore_index=True)
                     conn.update(worksheet="Respostas", data=df_final)
-                    st.success("✅ GRAVADO!")
-                    time.sleep(1)
+                    
+                    st.success("✅ AVALIAÇÃO GRAVADA!")
+                    time.sleep(1.5)
                     st.rerun()
-                except:
-                    st.error("Erro ao gravar. Tente novamente.")
+                except Exception as e:
+                    st.error("Erro ao comunicar com a planilha. Tente novamente em alguns segundos.")
 
-        # Chama a função amortecida
         formulario_avaliacao()
