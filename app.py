@@ -4,10 +4,10 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import time
 
-# Configuração focada em celular e estabilidade
+# Configuração estável
 st.set_page_config(page_title="Avaliação Afya", layout="centered")
 
-# Estilo para botões e textos de instrução
+# CSS para botões
 st.markdown("""
     <style>
     .stButton button {
@@ -18,12 +18,6 @@ st.markdown("""
         color: white;
         font-weight: bold;
     }
-    .instrucao {
-        font-size: 0.85em;
-        color: #555;
-        margin-bottom: -15px;
-        line-height: 1.2;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -32,7 +26,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def get_data(aba, ttl_sec=2):
     return conn.read(worksheet=aba, ttl=ttl_sec)
 
-# 1. CARREGAMENTO DOS DADOS
+# 1. CARREGAMENTO
 try:
     df_escalacao = get_data("Escalacao", ttl_sec=300)
 except:
@@ -53,7 +47,7 @@ if 'email' not in st.session_state:
                 st.session_state.email = email_limpo
                 st.rerun()
             else:
-                st.error("E-mail não encontrado no cadastro.")
+                st.error("E-mail não encontrado.")
     st.stop()
 
 # --- INTERFACE ---
@@ -101,7 +95,6 @@ else:
         st.warning("⏳ **Acesso bloqueado.**")
         st.info("Suas bancas agendadas serão liberadas automaticamente no horário previsto.")
     else:
-        # Ordenação Cronológica
         visiveis['ordem_tempo'] = pd.to_datetime(visiveis['Data'].astype(str) + ' ' + visiveis['Horario'].astype(str))
         visiveis = visiveis.sort_values(by='ordem_tempo')
         
@@ -122,7 +115,6 @@ else:
                 st.write("### 📝 Critérios")
                 notas = {}
                 
-                # --- DEFINIÇÃO DAS RUBRICAS (IGUAL ÀS ANTERIORES) ---
                 if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
                     rubrica = {
                         "Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse acadêmico."),
@@ -178,20 +170,18 @@ else:
 
                 st.warning(f"**Nota máxima: {nota_max} pts**")
 
-                for item, (p, desc) in rubrica.items():
-                    # Legenda fixa acima do slider (evita o problema do balão cortado)
-                    st.markdown(f"<p class='instrucao'>{desc}</p>", unsafe_allow_html=True)
-                    notas[item] = st.slider(f"**{item}**", 0, p, 0, key=f"s_{item}")
+                for item, (p, help_t) in rubrica.items():
+                    # Volta do Help dentro do slider
+                    notas[item] = st.slider(f"**{item}**", 0, p, 0, help=help_t, key=f"s_{item}")
 
                 total = sum(notas.values())
                 st.markdown(f"## Total: {total} / {nota_max}")
 
                 if st.button("🚀 GRAVAR AVALIAÇÃO"):
                     try:
-                        # Lê os dados mais novos para evitar conflito de gravação
-                        df_atual = conn.read(worksheet="Respostas", ttl=0)
-                        
-                        nova_linha = pd.DataFrame([{
+                        # Processo de gravação limpo
+                        df_at = conn.read(worksheet="Respostas", ttl=0)
+                        nova_l = pd.DataFrame([{
                             "Avaliador": nome_avaliador, 
                             "Email_Avaliador": st.session_state.email,
                             "Alunos": aluno_selecionado, 
@@ -199,15 +189,15 @@ else:
                             "Nota_Final": total,
                             "Data_Hora": datetime.now().strftime("%d/%m/%Y %H:%M")
                         }])
-                        
-                        df_f = pd.concat([df_atual, nova_linha], ignore_index=True)
+                        df_f = pd.concat([df_at, nova_l], ignore_index=True)
                         conn.update(worksheet="Respostas", data=df_f)
                         
-                        # Sucesso limpo
+                        # Animação e Sucesso
+                        st.balloons()
                         st.success("✅ GRAVADO COM SUCESSO!")
-                        time.sleep(1.5)
+                        time.sleep(2)
                         st.rerun()
                     except:
-                        st.error("Erro de conexão. Verifique sua internet e tente novamente.")
+                        st.error("Erro na rede. Tente gravar novamente.")
 
             formulario_avaliacao()
