@@ -14,7 +14,7 @@ def get_data(aba):
 
 # --- 1. CARREGAMENTO DOS DADOS ---
 try:
-    df_escalacao = get_data("Escalacao")
+    df_escalacao = conn.read(ttl=0)
 except Exception as e:
     st.error("⚠️ Erro de Conexão: Não foi possível ler a aba 'Escalacao'.")
     st.info("Verifique se o link no Secrets foi atualizado para a nova planilha e se as permissões estão como 'Editor'.")
