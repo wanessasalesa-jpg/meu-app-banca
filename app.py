@@ -6,13 +6,13 @@ import time
 
 st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 
-# --- CONEXÃO COM CACHE INTELIGENTE ---
+# --- CONEXÃO COM CACHE PARA EVITAR ERROS ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data(aba, tempo_cache=120):
     return conn.read(worksheet=aba, ttl=tempo_cache)
 
-# 1. CARREGAMENTO (Proteção contra erro 429)
+# 1. CARREGAMENTO INICIAL
 try:
     df_escalacao = get_data("Escalacao", tempo_cache=300)
 except Exception as e:
@@ -34,17 +34,21 @@ if email_input:
         except:
             feitos = []
 
-        # Filtrar trabalhos que o professor ainda não avaliou
+        # FILTRO DE PENDENTES
         pendentes = df_escalacao[(df_escalacao['Email'].str.lower() == email_input) & (~df_escalacao['Alunos'].isin(feitos))]
 
         if pendentes.empty:
             st.info("🎉 Todas as suas avaliações foram concluídas!")
         else:
-            # ORGANIZAR POR ORDEM ALFABÉTICA AQUI
-            lista_alfabetica = sorted(pendentes["Alunos"].tolist())
-            aluno_selecionado = st.selectbox("Selecione o grupo de alunos:", [""] + lista_alfabetica)
+            # --- LISTA EM ORDEM ALFABÉTICA ---
+            lista_grupos = sorted(pendentes["Alunos"].tolist())
+            aluno_selecionado = st.selectbox("Selecione o grupo de alunos:", [""] + lista_grupos)
+
+            if aluno_selecionado:
+                dados = pendentes[pendentes["Alunos"] == aluno_selecionado].iloc[0]
+                turma_bruta = str(dados['Turma']).strip().upper()
                 
-                # --- DEFINIÇÃO DE RUBRICAS (MANTIDAS EXATAMENTE COMO APROVADO) ---
+                # --- DEFINIÇÃO DE RUBRICAS (FIXADAS) ---
                 notas = {}
                 if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
                     rubrica = {
@@ -99,7 +103,6 @@ if email_input:
                     }
                     nota_max = 30
 
-                # EXIBIÇÃO DE INFORMAÇÕES E AVISO DE NOTA MÁXIMA
                 st.warning(f"⚠️ **Nota máxima para {turma_bruta}: {nota_max} pontos.**")
                 st.info(f"📚 **Título:** {dados['Titulo']}\n\n👤 **Orientador:** {dados['Orientador']}")
 
@@ -109,22 +112,17 @@ if email_input:
                 total = sum(notas.values())
                 st.markdown(f"### Nota Final: **{total}** / {nota_max}")
 
-                # 4. SALVAMENTO
                 if st.button("Confirmar e Gravar Avaliação"):
                     try:
-                        # Dados para salvar
                         nova_linha = pd.DataFrame([{
                             "Avaliador": email_input, 
                             "Alunos": aluno_selecionado, 
                             "Titulo": dados['Titulo'], 
                             "Nota_Final": total
                         }])
-                        
-                        # Processo de atualização da planilha
                         df_atual = conn.read(worksheet="Respostas", ttl=0)
                         df_final = pd.concat([df_atual, nova_linha], ignore_index=True)
                         conn.update(worksheet="Respostas", data=df_final)
-                        
                         st.balloons()
                         st.success("✅ GRAVADO COM SUCESSO!")
                         time.sleep(2)
