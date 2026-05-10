@@ -1,11 +1,12 @@
 import streamlit as st
-import pd
+import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import datetime
 import time
 
 st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 
+# --- CONEXÃO COM CACHE INTELIGENTE ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data(aba, tempo_cache=120):
@@ -44,7 +45,7 @@ if email_input:
                 dados = pendentes[pendentes["Alunos"] == aluno_selecionado].iloc[0]
                 turma_bruta = str(dados['Turma']).strip().upper()
                 
-                # --- DEFINIÇÃO DE RUBRICAS (RECUPERADAS E FIXADAS) ---
+                # --- DEFINIÇÃO DE RUBRICAS (MANTIDAS CONFORME APROVADO) ---
                 notas = {}
                 if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
                     rubrica = {
