@@ -6,7 +6,6 @@ import time
 
 st.set_page_config(page_title="Avaliação Afya Marabá", layout="centered")
 
-# Conexão com cache zerado para garantir dados novos
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data(aba):
@@ -39,7 +38,7 @@ if email_input:
         pendentes = meus_trabalhos[~meus_trabalhos["Alunos"].isin(feitos)]
 
         if pendentes.empty:
-            st.info("🎉 Você concluiu todas as suas avaliações!")
+            st.info("🎉 Todas as avaliações foram concluídas!")
         else:
             aluno_selecionado = st.selectbox("Selecione o grupo de alunos:", [""] + pendentes["Alunos"].tolist())
 
@@ -49,8 +48,10 @@ if email_input:
                 
                 st.info(f"📚 **Título:** {dados['Titulo']}\n\n👤 **Orientador:** {dados['Orientador']}")
 
-                # 3. RUBRICAS COMPLETAS (TEXTO INTEGRAL)
+                # 3. RUBRICAS OFICIAIS COM PESOS CORRIGIDOS
                 notas = {}
+                
+                # Lógica específica para cada Turma
                 if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
                     rubrica = {
                         "Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse acadêmico."),
@@ -80,10 +81,23 @@ if email_input:
                         "Tempo (15-20min)": (1, "Cumprimento do tempo estipulado.")
                     }
                     nota_max = 60
-                else: # MCM
+                elif "MCM V" in turma_bruta:
                     rubrica = {
-                        "Domínio de Conteúdo": (5, "Conhecimento demonstrado e resposta aos questionamentos."),
-                        "Coerência": (5, "Lógica entre o tema e a apresentação."),
+                        "Resumo": (10, "Qualidade da síntese do trabalho."),
+                        "Introdução": (10, "Fundamentação teórica e objetivos."),
+                        "Metodologia": (10, "Desenho do estudo e descrição dos métodos."),
+                        "Resultados": (20, "Apresentação e análise clara dos dados obtidos."),
+                        "Discussão": (10, "Confronto crítico com a literatura."),
+                        "Conclusão": (10, "Pertinência dos fechamentos aos resultados."),
+                        "Redação/ABNT": (10, "Correção gramatical e normas técnicas."),
+                        "Arguição": (10, "Autonomia e segurança nas respostas."),
+                        "Apresentação": (10, "Fluidez, clareza e domínio de palco (15-20 min).")
+                    }
+                    nota_max = 100
+                else: # MCM IV ou outros
+                    rubrica = {
+                        "Domínio de Conteúdo": (5, "Conhecimento demonstrado e resposta à banca."),
+                        "Coerência": (5, "Sintonia entre o tema e a apresentação."),
                         "Comunicação": (5, "Clareza, tom de voz e postura profissional."),
                         "Organização/Tempo": (5, "Gestão do tempo de 10 a 15 minutos."),
                         "Recursos Visuais": (5, "Qualidade dos slides e apoio audiovisual."),
@@ -91,14 +105,16 @@ if email_input:
                     }
                     nota_max = 30
 
-                st.subheader(f"Avaliação: {turma_bruta} (Máx: {nota_max})")
+                # RETORNO DO AVISO DE NOTA MÁXIMA
+                st.warning(f"⚠️ **Nota máxima para {turma_bruta}: {nota_max} pontos.**")
+
                 for item, (p, help_t) in rubrica.items():
-                    notas[item] = st.slider(f"{item} (Até {p})", 0, p, 1, help=help_t)
+                    notas[item] = st.slider(f"{item} (Máx: {p})", 0, p, 1, help=help_t)
 
                 total = sum(notas.values())
-                st.markdown(f"### Nota Total: **{total}** / {nota_max}")
+                st.markdown(f"### Nota Final: **{total}** / {nota_max}")
 
-                # 4. SALVAMENTO ROBUSTO
+                # 4. SALVAMENTO
                 if st.button("Confirmar e Gravar Avaliação"):
                     try:
                         nova_linha = pd.DataFrame([{
@@ -108,18 +124,13 @@ if email_input:
                             "Nota_Final": total
                         }])
                         
-                        # Estratégia de Atualização: Lê tudo -> Adiciona -> Salva tudo
-                        try:
-                            atual_df = get_data("Respostas")
-                            final_df = pd.concat([atual_df, nova_linha], ignore_index=True)
-                        except:
-                            final_df = nova_linha
-                            
+                        atual_df = get_data("Respostas")
+                        final_df = pd.concat([atual_df, nova_linha], ignore_index=True)
                         conn.update(worksheet="Respostas", data=final_df)
                         
                         st.balloons()
-                        st.success("✅ GRAVADO COM SUCESSO! Voltando...")
-                        time.sleep(3)
+                        st.success("✅ GRAVADO COM SUCESSO!")
+                        time.sleep(2)
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao salvar: {e}")
