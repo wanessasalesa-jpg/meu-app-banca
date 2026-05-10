@@ -7,6 +7,7 @@ import time
 # Configuração estável e limpa
 st.set_page_config(page_title="Avaliação Afya", layout="centered")
 
+# CSS para esconder elementos desnecessários e ajustar fontes
 st.markdown("""
     <style>
     header {visibility: hidden;}
@@ -19,6 +20,18 @@ st.markdown("""
         background-color: #007bff;
         color: white;
         font-weight: bold;
+    }
+    /* Estilo para a descrição do critério */
+    .descricao-fixa {
+        font-size: 0.9em;
+        color: #31333F;
+        font-weight: bold;
+        margin-bottom: -25px;
+    }
+    .ajuda-texto {
+        font-size: 0.8em;
+        color: #5e6066;
+        font-style: italic;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -123,28 +136,30 @@ else:
                 
                 # Rubricas originais (TCC I, II, MCM V)
                 if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
-                    rubrica = {"Tema Contemporâneo": (3, "Escolha de tema contemporâneo..."), "Resumo": (1, "Autoexplicativo..."), "Introdução": (5, "Clareza..."), "Justificativa/Problema": (5, "Formatação..."), "Objetivos": (5, "Claros..."), "Metodologia": (10, "Tipo de estudo..."), "Referências": (1, "Fontes..."), "Apresentação Oral": (10, "Segurança..."), "Coerência": (10, "Sintonia..."), "Qualidade Visual": (9, "Material..."), "Tempo (10-15min)": (1, "Respeito...")}
+                    rubrica = {"Tema Contemporâneo": (3, "Escolha de tema contemporâneo, oportuno e de interesse acadêmico."), "Resumo": (1, "Autoexplicativo, objetivos e conclusão condizentes, uso de DECS."), "Introdução": (5, "Clareza, concisão e sequência lógica dos argumentos."), "Justificativa/Problema": (5, "Formatação ABNT e relevância do problema."), "Objetivos": (5, "Claros, exequíveis e condizentes com o tema."), "Metodologia": (10, "Tipo de estudo, população, local, ética e análise de dados."), "Referências": (1, "Fontes confiáveis, atuais e listadas corretamente."), "Apresentação Oral": (10, "Segurança, postura, dicção e domínio do conteúdo."), "Coerência": (10, "Conteúdo da fala em sintonia com o texto escrito."), "Qualidade Visual": (9, "Material visual de apoio bem estruturado e organizado."), "Tempo (10-15min)": (1, "Respeito ao limite de tempo regulamentar.")}
                     nota_max = 60
                 elif "TCC II" in turma_bruta:
-                    rubrica = {"Tema e Resumo": (4, "Contemporaneidade..."), "Introdução": (5, "Justificativa..."), "Metodologia": (5, "Rigor..."), "Resultados": (5, "Concisão..."), "Discussão e Conclusão": (10, "Análise..."), "Referências": (1, "Fontes..."), "Apresentação Oral": (10, "Domínio..."), "Coerência": (10, "Lógica..."), "Qualidade Visual": (9, "Slides..."), "Tempo (15-20min)": (1, "Cumprimento...")}
+                    rubrica = {"Tema e Resumo": (4, "Contemporaneidade e uso correto de DECS."), "Introdução": (5, "Justificativa e objetivos claros e bem fundamentados."), "Metodologia": (5, "Rigor científico e observância aos preceitos éticos."), "Resultados": (5, "Descrição concisa que responde aos objetivos."), "Discussão e Conclusão": (10, "Análise crítica dos achados e limitações do estudo."), "Referências": (1, "Fontes bibliográficas pertinentes e atualizadas."), "Apresentação Oral": (10, "Domínio de palco, clareza e segurança."), "Coerência": (10, "Lógica entre a explanação oral e o trabalho escrito."), "Qualidade Visual": (9, "Slides organizados e de fácil leitura."), "Tempo (15-20min)": (1, "Cumprimento do tempo estipulado.")}
                     nota_max = 60
                 elif "MCM V" in turma_bruta:
-                    rubrica = {"Resumo": (10, "Síntese"), "Introdução": (10, "Objetivos"), "Metodologia": (10, "Desenho"), "Resultados": (20, "Análise"), "Discussão": (10, "Crítica"), "Conclusão": (10, "Fechamento"), "Redação/ABNT": (10, "Normas"), "Arguição": (10, "Segurança"), "Apresentação": (10, "Domínio")}
+                    rubrica = {"Resumo": (10, "Qualidade da síntese do trabalho."), "Introdução": (10, "Fundamentação teórica e objetivos."), "Metodologia": (10, "Desenho do estudo e descrição dos métodos."), "Resultados": (20, "Apresentação e análise clara dos dados obtidos."), "Discussão": (10, "Confronto crítico com a literatura."), "Conclusão": (10, "Pertinência dos fechamentos aos resultados."), "Redação/ABNT": (10, "Correção gramatical e normas técnicas."), "Arguição": (10, "Autonomia e segurança nas respostas."), "Apresentação": (10, "Fluidez, clareza e domínio de palco (15-20 min).")}
                     nota_max = 100
                 else:
                     rubrica = {"Domínio de Conteúdo": (5, "Conhecimento."), "Coerência": (5, "Lógica."), "Comunicação": (5, "Postura."), "Organização/Tempo": (5, "Gestão."), "Recursos Visuais": (5, "Qualidade."), "Métodos": (5, "Adequação.")}
                     nota_max = 30
 
                 st.warning(f"**Nota máxima: {nota_max} pts**")
+                
                 for item, (p, help_t) in rubrica.items():
-                    notas[item] = st.slider(f"**{item}**", 0, p, 0, help=help_t, key=f"s_{item}")
+                    # SOLUÇÃO DEFINITIVA: Título + Descrição em cima do slider
+                    st.markdown(f"<div class='descricao-fixa'>{item} (Máx: {p})</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='ajuda-texto'>{help_t}</div>", unsafe_allow_html=True)
+                    notas[item] = st.slider(item, 0, p, 0, key=f"s_{item}", label_visibility="collapsed")
 
                 total = sum(notas.values())
                 st.markdown(f"## Total: {total} / {nota_max}")
 
-                # --- NOVA TRAVA DE SEGURANÇA ---
                 tem_zero = any(v == 0 for v in notas.values())
-                
                 if tem_zero:
                     st.error("⚠️ Atenção: Existem critérios com nota ZERO.")
                     confirmar_zero = st.checkbox("Confirmo que as notas zero são intencionais.")
@@ -153,7 +168,7 @@ else:
 
                 if st.button("🚀 GRAVAR AVALIAÇÃO"):
                     if not confirmar_zero:
-                        st.warning("Por favor, revise os critérios ou marque a caixa de confirmação para notas zero.")
+                        st.warning("Confirme as notas zero antes de gravar.")
                     else:
                         sucesso = False
                         try:
@@ -163,11 +178,11 @@ else:
                             conn.update(worksheet="Respostas", data=df_f)
                             sucesso = True
                         except Exception as e:
-                            st.error(f"Erro na rede: {e}")
+                            st.error(f"Erro ao salvar. Verifique a internet.")
                         
                         if sucesso:
                             st.balloons()
-                            st.success("✅ GRAVADO COM SUCESSO!")
+                            st.success("✅ GRAVADO!")
                             time.sleep(2)
                             st.rerun()
 
