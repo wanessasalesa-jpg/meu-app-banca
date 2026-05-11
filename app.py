@@ -5,13 +5,13 @@ from datetime import datetime, timedelta
 import time
 import pytz 
 
-# 1. CONFIGURAÇÃO DA PÁGINA
-st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
+# Configuração estável
+st.set_page_config(page_title="CRIVO - Gestão de Bancas", layout="centered")
 
-# 2. FUSO HORÁRIO DE BRASÍLIA
+# Alterado para o padrão nacional de Brasília (comercialmente melhor)
 fuso_bruta = pytz.timezone('America/Sao_Paulo')
 
-# 3. ESTILIZAÇÃO INTERNA (CSS)
+# CSS para esconder menus e estilizar botões
 st.markdown("""
     <style>
     header {visibility: hidden;}
@@ -28,48 +28,52 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 4. CABEÇALHO
-st.title("🎓 CRIVO")
-st.subheader("Sistema de Gestão de Bancas Acadêmicas")
+# --- CABEÇALHO COM IDENTIDADE VISUAL ---
+col_logo, col_tit = st.columns([1, 4])
+with col_logo:
+    # Exibe a logo do CRIVO
+    st.image("http://googleusercontent.com/image_collection/image_retrieval/8612724178582184266", width=100)
+
+with col_tit:
+    st.title("CRIVO")
+    st.subheader("Sistema de Gestão de Bancas")
+
 st.caption("© 2026 Desenvolvido por Wanessa Sales de Almeida")
 st.divider()
 
-# 5. CONEXÃO COM GOOGLE SHEETS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data(aba, ttl_sec=2):
     return conn.read(worksheet=aba, ttl=ttl_sec)
 
-# 6. CARREGAMENTO DOS DADOS
+# 1. CARREGAMENTO
 try:
     df_escalacao = get_data("Escalacao", ttl_sec=300)
 except:
-    st.error("Conectando ao banco de dados... Aguarde.")
+    st.error("Sincronizando dados...")
     time.sleep(1)
     st.rerun()
 
-# --- A TRAVA REAL DE LOGOUT (QUERY PARAMS ATUALIZADO) ---
-# Verifica se existe um utilizador na URL ou na sessão
-if 'email' not in st.session_state:
-    if "user" in st.query_params:
-        st.session_state.email = st.query_params["user"]
+# --- LOGIN PERSISTENTE ---
+query_params = st.query_params
+if "user" in query_params and "email" not in st.session_state:
+    st.session_state.email = query_params["user"]
 
 if 'email' not in st.session_state:
-    st.write("### Identificação de Avaliador")
-    email_raw = st.text_input("Digite seu e-mail cadastrado:").strip()
-    if st.button("Acessar Sistema"):
+    st.write("### Identificação")
+    email_raw = st.text_input("E-mail cadastrado:").strip()
+    if st.button("Acessar CRIVO"):
         if email_raw:
             email_limpo = email_raw.lower()
             if email_limpo in df_escalacao['Email'].str.lower().unique():
                 st.session_state.email = email_limpo
-                # Esta linha trava o e-mail na URL
                 st.query_params["user"] = email_limpo
                 st.rerun()
             else:
-                st.error("E-mail não autorizado ou não encontrado.")
+                st.error("Acesso não autorizado.")
     st.stop()
 
-# --- AMBIENTE DO PROFESSOR ---
+# --- INTERFACE DO AVALIADOR ---
 prof_dados = df_escalacao[df_escalacao['Email'].str.lower() == st.session_state.email].iloc[0]
 nome_avaliador = prof_dados['Avaliador']
 
@@ -78,113 +82,105 @@ with col_user:
     st.write(f"**Avaliador:** {nome_avaliador}")
 with col_exit:
     if st.button("Sair"):
-        # Limpa tudo para permitir novo login
-        st.session_state.clear()
+        del st.session_state.email
         st.query_params.clear()
         st.rerun()
 
-# Busca de trabalhos já avaliados
+# BUSCA DE PENDENTES
 try:
     df_respostas = get_data("Respostas", ttl_sec=0)
     feitos = df_respostas[df_respostas["Email_Avaliador"] == st.session_state.email]["Alunos"].tolist()
 except:
     feitos = []
 
+# --- LÓGICA DE TRAVA (Horário de Brasília) ---
+agora_local = datetime.now(fuso_bruta).replace(tzinfo=None)
+
+def verificar_liberacao(linha):
+    try:
+        data_banca = pd.to_datetime(linha['Data'], dayfirst=True).date()
+        hora_banca = pd.to_datetime(linha['Horario']).time()
+        momento_banca = datetime.combine(data_banca, hora_banca)
+        # Libera 15 min antes
+        return agora_local >= (momento_banca - timedelta(minutes=15))
+    except:
+        return True
+
 pendentes = df_escalacao[(df_escalacao['Email'].str.lower() == st.session_state.email) & (~df_escalacao['Alunos'].isin(feitos))].copy()
 
 if pendentes.empty:
     st.balloons()
-    st.success("🎉 Todas as suas avaliações foram enviadas com sucesso!")
+    st.success("🎉 Todas as avaliações foram concluídas!")
 else:
-    lista_grupos = pendentes["Alunos"].tolist()
-    aluno_selecionado = st.selectbox("🎯 Escolha o Grupo para Avaliar:", [""] + lista_grupos)
+    pendentes['liberado'] = pendentes.apply(verificar_liberacao, axis=1)
+    visiveis = pendentes[pendentes['liberado'] == True].copy()
 
-    if aluno_selecionado:
-        dados = pendentes[pendentes["Alunos"] == aluno_selecionado].iloc[0]
-        turma_bruta = str(dados['Turma']).strip().upper()
-        
-        with st.expander("📖 Informações do Trabalho", expanded=True):
-            st.write(f"**Turma:** {turma_bruta}")
-            st.write(f"**Título:** {dados['Titulo']}")
-            st.write(f"**Orientador:** {dados['Orientador']}")
+    if visiveis.empty:
+        st.warning("⏳ **Bancas em espera.**")
+        st.info("As avaliações serão liberadas conforme o cronograma oficial.")
+    else:
+        visiveis['ordem_tempo'] = pd.to_datetime(visiveis['Data'].astype(str) + ' ' + visiveis['Horario'].astype(str))
+        visiveis = visiveis.sort_values(by='ordem_tempo')
+        lista_grupos = visiveis["Alunos"].tolist()
+        aluno_selecionado = st.selectbox("🎯 Selecione o Grupo:", [""] + lista_grupos)
 
-        @st.fragment
-        def formulario_avaliacao():
-            st.write("### 📝 Critérios de Avaliação")
-            notas = {}
+        if aluno_selecionado:
+            dados = visiveis[visiveis["Alunos"] == aluno_selecionado].iloc[0]
+            turma_bruta = str(dados['Turma']).strip().upper()
             
-            # --- RUBRICAS COM TEMPO E HELP ---
-            if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
-                rubrica = {
-                    "Tema": (3, "Clareza, delimitação e atualidade do tema."),
-                    "Resumo": (1, "Objetivo, método, resultados esperados e palavras-chave."),
-                    "Introdução": (5, "Contextualização e problema de pesquisa."),
-                    "Justificativa": (5, "Importância e contribuição do trabalho."),
-                    "Objetivos": (5, "Geral e específicos claros."),
-                    "Metodologia": (10, "Desenho do estudo e rigor técnico."),
-                    "Referências": (1, "Normas ABNT/Vancouver."),
-                    "Apresentação Oral": (10, "Domínio de conteúdo e clareza."),
-                    "Coerência": (10, "Lógica entre as partes do texto."),
-                    "Qualidade Visual": (9, "Organização dos slides."),
-                    "Tempo": (1, "Respeito ao tempo limite.")
-                }
-            elif "TCC II" in turma_bruta:
-                rubrica = {
-                    "Tema/Resumo": (4, "Qualidade técnica e aderência ao tema."),
-                    "Introdução": (5, "Fundamentação teórica sólida."),
-                    "Metodologia": (5, "Execução do método proposto."),
-                    "Resultados": (5, "Apresentação clara dos dados."),
-                    "Discussão": (10, "Capacidade crítica e confronto literário."),
-                    "Referências": (1, "Rigor técnico nas citações."),
-                    "Apresentação Oral": (10, "Segurança na defesa."),
-                    "Coerência": (10, "União lógica do trabalho final."),
-                    "Qualidade Visual": (9, "Profissionalismo nos slides."),
-                    "Tempo": (1, "Cumprimento rigoroso do tempo limite de apresentação.")
-                }
-            else:
-                rubrica = {
-                    "Resumo/Introdução": (10, "Síntese e fundamentação."),
-                    "Metodologia": (10, "Rigor e descrição."),
-                    "Resultados/Discussão": (20, "Análise e crítica."),
-                    "Redação/ABNT": (10, "Gramática e normas."),
-                    "Arguição": (10, "Segurança nas respostas."),
-                    "Apresentação Oral": (10, "Domínio de conteúdo."),
-                    "Qualidade Visual": (10, "Estética dos slides."),
-                    "Tempo": (10, "Respeito ao limite de tempo.")
-                }
+            with st.expander("📖 Ficha Técnica", expanded=True):
+                st.write(f"**Trabalho:** {turma_bruta}")
+                st.write(f"**Título:** {dados['Titulo']}")
+                st.write(f"**Orientador:** {dados['Orientador']}")
 
-            for item, (p, help_t) in rubrica.items():
-                notas[item] = st.slider(f"**{item} ({p} pts)**", 0, p, 0, help=help_t, key=f"s_{item}")
-
-            total = sum(notas.values())
-            st.markdown(f"## Nota Final: {total}")
-
-            # --- TRAVA DE NOTA ZERO ---
-            tem_zero = any(v == 0 for v in notas.values())
-            conf_zero = True
-            if tem_zero:
-                st.error("⚠️ Atenção: Existem critérios com nota zero.")
-                conf_zero = st.checkbox("Confirmo que as notas zero são intencionais.")
-
-            if st.button("🚀 GRAVAR AVALIAÇÃO NO SISTEMA"):
-                if tem_zero and not conf_zero:
-                    st.warning("Marque o checkbox acima para confirmar as notas zero.")
+            @st.fragment
+            def formulario_avaliacao():
+                st.write("### 📝 Rubricas de Avaliação")
+                notas = {}
+                
+                # Definição de Rubricas (TCC I, II e MCM V)
+                if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
+                    rubrica = {"Tema Contemporâneo": (3, "Escolha de tema contemporâneo."), "Resumo": (1, "Autoexplicativo, objetivos e conclusão."), "Introdução": (5, "Clareza e sequência lógica."), "Justificativa/Problema": (5, "ABNT e relevância."), "Objetivos": (5, "Claros e exequíveis."), "Metodologia": (10, "Tipo de estudo e ética."), "Referências": (1, "Fontes confiáveis e atuais."), "Apresentação Oral": (10, "Postura e domínio."), "Coerência": (10, "Sintonia fala/escrita."), "Qualidade Visual": (9, "Material bem estruturado."), "Tempo (10-15min)": (1, "Respeito ao limite.")}
+                elif "TCC II" in turma_bruta:
+                    rubrica = {"Tema e Resumo": (4, "Contemporaneidade e DECS."), "Introdução": (5, "Justificativa e objetivos."), "Metodologia": (5, "Rigor científico e ética."), "Resultados": (5, "Descrição concisa."), "Discussão/Conclusão": (10, "Análise crítica."), "Referências": (1, "Pertinentes e atuais."), "Apresentação Oral": (10, "Domínio e clareza."), "Coerência": (10, "Lógica oral/escrita."), "Qualidade Visual": (9, "Slides organizados."), "Tempo (15-20min)": (1, "Cumprimento do tempo.")}
+                elif "MCM V" in turma_bruta:
+                    rubrica = {"Resumo": (10, "Qualidade da síntese."), "Introdução": (10, "Fundamentação e objetivos."), "Metodologia": (10, "Desenho e métodos."), "Resultados": (20, "Análise clara."), "Discussão": (10, "Confronto com literatura."), "Conclusão": (10, "Pertinência."), "Redação/ABNT": (10, "Gramática e normas."), "Arguição": (10, "Segurança nas respostas."), "Apresentação": (10, "Fluidez e domínio (15-20 min).")}
                 else:
-                    try:
-                        df_at = conn.read(worksheet="Respostas", ttl=0)
-                        nova_l = pd.DataFrame([{
-                            "Avaliador": nome_avaliador, 
-                            "Email_Avaliador": st.session_state.email, 
-                            "Alunos": aluno_selecionado, 
-                            "Nota_Final": total, 
-                            "Data_Hora": datetime.now(fuso_bruta).strftime("%d/%m/%Y %H:%M")
-                        }])
-                        df_f = pd.concat([df_at, nova_l], ignore_index=True)
-                        conn.update(worksheet="Respostas", data=df_f)
-                        st.success("✅ Avaliação gravada com sucesso!")
-                        time.sleep(2)
-                        st.rerun()
-                    except:
-                        st.error("Erro de conexão.")
+                    rubrica = {"Domínio": (5, "Conhecimento."), "Coerência": (5, "Lógica."), "Comunicação": (5, "Postura."), "Organização": (5, "Gestão."), "Visual": (5, "Qualidade."), "Métodos": (5, "Adequação.")}
 
-        formulario_avaliacao()
+                total = 0
+                for item, (p, help_t) in rubrica.items():
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", 0, p, 0, help=help_t, key=f"s_{item}")
+
+                total = sum(notas.values())
+                st.markdown(f"## Pontuação Final: {total}")
+
+                tem_zero = any(v == 0 for v in notas.values())
+                conf_zero = True
+                if tem_zero:
+                    st.error("⚠️ Critérios com nota zero detectados.")
+                    conf_zero = st.checkbox("Confirmo que as notas zero são intencionais.")
+
+                if st.button("🚀 FINALIZAR AVALIAÇÃO"):
+                    if tem_zero and not conf_zero:
+                        st.warning("Por favor, confirme as notas zero.")
+                    else:
+                        try:
+                            df_at = conn.read(worksheet="Respostas", ttl=0)
+                            nova_l = pd.DataFrame([{
+                                "Avaliador": nome_avaliador, 
+                                "Email_Avaliador": st.session_state.email, 
+                                "Alunos": aluno_selecionado, 
+                                "Nota_Final": total, 
+                                "Data_Hora": datetime.now(fuso_bruta).strftime("%d/%m/%Y %H:%M")
+                            }])
+                            df_f = pd.concat([df_at, nova_l], ignore_index=True)
+                            conn.update(worksheet="Respostas", data=df_f)
+                            st.balloons()
+                            st.success("Avaliação enviada com sucesso!")
+                            time.sleep(2)
+                            st.rerun()
+                        except:
+                            st.error("Erro ao salvar. Verifique sua conexão.")
+
+            formulario_avaliacao()
