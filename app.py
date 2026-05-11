@@ -48,7 +48,12 @@ except:
     time.sleep(1)
     st.rerun()
 
-# --- SISTEMA DE LOGIN ---
+# --- A TRAVA REAL DE LOGOUT (QUERY PARAMS ATUALIZADO) ---
+# Verifica se existe um utilizador na URL ou na sessão
+if 'email' not in st.session_state:
+    if "user" in st.query_params:
+        st.session_state.email = st.query_params["user"]
+
 if 'email' not in st.session_state:
     st.write("### Identificação de Avaliador")
     email_raw = st.text_input("Digite seu e-mail cadastrado:").strip()
@@ -57,6 +62,8 @@ if 'email' not in st.session_state:
             email_limpo = email_raw.lower()
             if email_limpo in df_escalacao['Email'].str.lower().unique():
                 st.session_state.email = email_limpo
+                # Esta linha trava o e-mail na URL
+                st.query_params["user"] = email_limpo
                 st.rerun()
             else:
                 st.error("E-mail não autorizado ou não encontrado.")
@@ -71,7 +78,9 @@ with col_user:
     st.write(f"**Avaliador:** {nome_avaliador}")
 with col_exit:
     if st.button("Sair"):
-        del st.session_state.email
+        # Limpa tudo para permitir novo login
+        st.session_state.clear()
+        st.query_params.clear()
         st.rerun()
 
 # Busca de trabalhos já avaliados
@@ -81,7 +90,6 @@ try:
 except:
     feitos = []
 
-# Filtrar apenas o que falta avaliar
 pendentes = df_escalacao[(df_escalacao['Email'].str.lower() == st.session_state.email) & (~df_escalacao['Alunos'].isin(feitos))].copy()
 
 if pendentes.empty:
@@ -105,44 +113,44 @@ else:
             st.write("### 📝 Critérios de Avaliação")
             notas = {}
             
-            # --- DEFINIÇÃO DAS RUBRICAS (CORRIGIDO TCC II) ---
+            # --- RUBRICAS COM TEMPO E HELP ---
             if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
                 rubrica = {
-                    "Tema": (3, "Avalie a clareza, delimitação e a atualidade do tema proposto."),
-                    "Resumo": (1, "Verifique se contém objetivo, método, resultados esperados e palavras-chave."),
-                    "Introdução": (5, "Contextualização do tema e se o problema de pesquisa está claro."),
-                    "Justificativa": (5, "A importância do trabalho e contribuição para a ciência/sociedade."),
-                    "Objetivos": (5, "Se o objetivo geral e específicos são mensuráveis e claros."),
-                    "Metodologia": (10, "Descrição detalhada do desenho do estudo, critérios e ética."),
-                    "Referências": (1, "Uso de normas ABNT/Vancouver e atualidade das fontes."),
-                    "Apresentação Oral": (10, "Domínio de conteúdo, postura e clareza na fala."),
-                    "Coerência": (10, "Lógica entre introdução, objetivos e métodos."),
-                    "Qualidade Visual": (9, "Organização dos slides, tempo e recursos visuais."),
-                    "Tempo": (1, "Respeito ao tempo limite estipulado.")
+                    "Tema": (3, "Clareza, delimitação e atualidade do tema."),
+                    "Resumo": (1, "Objetivo, método, resultados esperados e palavras-chave."),
+                    "Introdução": (5, "Contextualização e problema de pesquisa."),
+                    "Justificativa": (5, "Importância e contribuição do trabalho."),
+                    "Objetivos": (5, "Geral e específicos claros."),
+                    "Metodologia": (10, "Desenho do estudo e rigor técnico."),
+                    "Referências": (1, "Normas ABNT/Vancouver."),
+                    "Apresentação Oral": (10, "Domínio de conteúdo e clareza."),
+                    "Coerência": (10, "Lógica entre as partes do texto."),
+                    "Qualidade Visual": (9, "Organização dos slides."),
+                    "Tempo": (1, "Respeito ao tempo limite.")
                 }
             elif "TCC II" in turma_bruta:
                 rubrica = {
-                    "Tema/Resumo": (4, "Qualidade técnica do resumo e aderência ao tema."),
-                    "Introdução": (5, "Fundamentação teórica sólida e revisão de literatura."),
-                    "Metodologia": (5, "Execução real do método proposto no TCC I."),
-                    "Resultados": (5, "Apresentação clara dos dados obtidos."),
-                    "Discussão": (10, "Capacidade crítica de comparar resultados com a literatura."),
-                    "Referências": (1, "Rigor técnico nas citações e bibliografia."),
-                    "Apresentação Oral": (10, "Segurança na defesa dos resultados."),
-                    "Coerência": (10, "União lógica de todas as partes do trabalho final."),
-                    "Qualidade Visual": (9, "Profissionalismo na apresentação visual."),
+                    "Tema/Resumo": (4, "Qualidade técnica e aderência ao tema."),
+                    "Introdução": (5, "Fundamentação teórica sólida."),
+                    "Metodologia": (5, "Execução do método proposto."),
+                    "Resultados": (5, "Apresentação clara dos dados."),
+                    "Discussão": (10, "Capacidade crítica e confronto literário."),
+                    "Referências": (1, "Rigor técnico nas citações."),
+                    "Apresentação Oral": (10, "Segurança na defesa."),
+                    "Coerência": (10, "União lógica do trabalho final."),
+                    "Qualidade Visual": (9, "Profissionalismo nos slides."),
                     "Tempo": (1, "Cumprimento rigoroso do tempo limite de apresentação.")
                 }
             else:
                 rubrica = {
-                    "Resumo/Introdução": (10, "Síntese, fundamentação e clareza inicial."),
-                    "Metodologia": (10, "Rigor na descrição dos métodos e materiais."),
-                    "Resultados/Discussão": (20, "Análise de dados e confrontação com literatura."),
-                    "Redação/ABNT": (10, "Gramática, ortografia e normas técnicas."),
-                    "Arguição": (10, "Segurança e clareza nas respostas à banca."),
-                    "Apresentação Oral": (10, "Domínio de conteúdo e postura."),
-                    "Qualidade Visual": (10, "Estética e organização dos slides."),
-                    "Tempo": (10, "Respeito ao limite de tempo da apresentação.")
+                    "Resumo/Introdução": (10, "Síntese e fundamentação."),
+                    "Metodologia": (10, "Rigor e descrição."),
+                    "Resultados/Discussão": (20, "Análise e crítica."),
+                    "Redação/ABNT": (10, "Gramática e normas."),
+                    "Arguição": (10, "Segurança nas respostas."),
+                    "Apresentação Oral": (10, "Domínio de conteúdo."),
+                    "Qualidade Visual": (10, "Estética dos slides."),
+                    "Tempo": (10, "Respeito ao limite de tempo.")
                 }
 
             for item, (p, help_t) in rubrica.items():
@@ -177,6 +185,6 @@ else:
                         time.sleep(2)
                         st.rerun()
                     except:
-                        st.error("Erro de conexão. Verifique se as Secrets estão configuradas.")
+                        st.error("Erro de conexão.")
 
         formulario_avaliacao()
