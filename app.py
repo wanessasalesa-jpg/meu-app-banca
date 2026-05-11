@@ -48,7 +48,7 @@ except:
     time.sleep(1)
     st.rerun()
 
-# --- TRAVA DE LOGOUT (QUERY PARAMS) ---
+# --- TRAVA DE LOGOUT (PERSISTÊNCIA VIA URL) ---
 if 'email' not in st.session_state:
     if "user" in st.query_params:
         st.session_state.email = st.query_params["user"]
@@ -64,7 +64,7 @@ if 'email' not in st.session_state:
                 st.query_params["user"] = email_limpo
                 st.rerun()
             else:
-                st.error("E-mail não autorizado.")
+                st.error("E-mail não autorizado ou não cadastrado.")
     st.stop()
 
 # --- AMBIENTE DO PROFESSOR ---
@@ -80,7 +80,7 @@ with col_exit:
         st.query_params.clear()
         st.rerun()
 
-# Busca de pendentes
+# Busca de trabalhos já avaliados para não repetir
 try:
     df_respostas = get_data("Respostas", ttl_sec=0)
     feitos = df_respostas[df_respostas["Email_Avaliador"] == st.session_state.email]["Alunos"].tolist()
@@ -91,53 +91,82 @@ pendentes = df_escalacao[(df_escalacao['Email'].str.lower() == st.session_state.
 
 if pendentes.empty:
     st.balloons()
-    st.success("🎉 Todas as avaliações concluídas!")
+    st.success("🎉 Todas as suas avaliações foram enviadas com sucesso!")
 else:
     lista_grupos = pendentes["Alunos"].tolist()
-    aluno_selecionado = st.selectbox("🎯 Escolha o Grupo:", [""] + lista_grupos)
+    aluno_selecionado = st.selectbox("🎯 Escolha o Grupo para Avaliar:", [""] + lista_grupos)
 
     if aluno_selecionado:
         dados = pendentes[pendentes["Alunos"] == aluno_selecionado].iloc[0]
         turma_bruta = str(dados['Turma']).strip().upper()
         
-        with st.expander("📖 Detalhes do Trabalho", expanded=True):
+        with st.expander("📖 Informações do Trabalho", expanded=True):
             st.write(f"**Turma:** {turma_bruta}")
             st.write(f"**Título:** {dados['Titulo']}")
             st.write(f"**Orientador:** {dados['Orientador']}")
 
         @st.fragment
         def formulario_avaliacao():
-            # --- LÓGICA DE RUBRICAS E PONTUAÇÃO MÁXIMA ---
+            # --- DEFINIÇÃO DAS RUBRICAS ---
             if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
-                rubrica = {"Tema": (3, "Clareza e delimitação."), "Resumo": (1, "Objetivos e métodos."), "Introdução": (5, "Contextualização."), "Justificativa": (5, "Relevância."), "Objetivos": (5, "Geral e específicos."), "Metodologia": (10, "Rigor técnico."), "Referências": (1, "Normas ABNT/Vancouver."), "Apresentação Oral": (10, "Domínio."), "Coerência": (10, "Lógica."), "Qualidade Visual": (9, "Slides."), "Tempo": (1, "Limite estipulado.")}
-                v_max = 60 # Ajuste para o total real da soma
+                rubrica = {
+                    "Tema": (3, "Avalie a clareza, delimitação e a atualidade do tema proposto."),
+                    "Resumo": (1, "Verifique se contém objetivo, método, resultados esperados e palavras-chave."),
+                    "Introdução": (5, "Contextualização do tema e problema de pesquisa."),
+                    "Justificativa": (5, "Importância e contribuição do trabalho."),
+                    "Objetivos": (5, "Se o objetivo geral e específicos são claros."),
+                    "Metodologia": (10, "Descrição detalhada do desenho do estudo e rigor."),
+                    "Referências": (1, "Uso de normas ABNT/Vancouver."),
+                    "Apresentação Oral": (10, "Domínio de conteúdo e clareza na fala."),
+                    "Coerência": (10, "Lógica entre introdução, objetivos e métodos."),
+                    "Qualidade Visual": (9, "Organização dos slides e recursos visuais."),
+                    "Tempo": (1, "Respeito ao tempo limite estipulado.")
+                }
             elif "TCC II" in turma_bruta:
-                rubrica = {"Tema/Resumo": (4, "Aderência e qualidade."), "Introdução": (5, "Fundamentação teórica."), "Metodologia": (5, "Execução do método."), "Resultados": (5, "Clareza dos dados."), "Discussão": (10, "Capacidade crítica."), "Referências": (1, "Rigor técnico."), "Apresentação Oral": (10, "Segurança na defesa."), "Coerência": (10, "União lógica."), "Qualidade Visual": (9, "Slides."), "Tempo": (1, "Limite estipulado.")}
-                v_max = 60
-            else: # MCM e outros
-                rubrica = {"Resumo/Introdução": (10, "Síntese."), "Metodologia": (10, "Rigor."), "Resultados/Discussão": (20, "Análise."), "Redação/ABNT": (10, "Gramática."), "Arguição": (10, "Segurança."), "Apresentação Oral": (10, "Domínio."), "Qualidade Visual": (10, "Estética."), "Tempo": (10, "Cronograma.")}
-                v_max = 90
+                rubrica = {
+                    "Tema/Resumo": (4, "Qualidade técnica do resumo e aderência ao tema."),
+                    "Introdução": (5, "Fundamentação teórica sólida e revisão."),
+                    "Metodologia": (5, "Execução real do método proposto no TCC I."),
+                    "Resultados": (5, "Apresentação clara dos dados obtidos."),
+                    "Discussão": (10, "Capacidade crítica de comparar resultados."),
+                    "Referências": (1, "Rigor técnico nas citações e bibliografia."),
+                    "Apresentação Oral": (10, "Segurança na defesa dos resultados."),
+                    "Coerência": (10, "União lógica de todas as partes do trabalho."),
+                    "Qualidade Visual": (9, "Profissionalismo na apresentação visual."),
+                    "Tempo": (1, "Cumprimento rigoroso do tempo limite.")
+                }
+            else: # Padrão MCM e outras
+                rubrica = {
+                    "Resumo/Introdução": (10, "Síntese, fundamentação e clareza."),
+                    "Metodologia": (10, "Rigor na descrição dos métodos."),
+                    "Resultados/Discussão": (20, "Análise de dados e confrontação."),
+                    "Redação/ABNT": (10, "Gramática e normas técnicas."),
+                    "Arguição": (10, "Segurança nas respostas à banca."),
+                    "Apresentação Oral": (10, "Domínio de conteúdo e postura."),
+                    "Qualidade Visual": (10, "Estética e organização dos slides."),
+                    "Tempo": (10, "Respeito ao limite de tempo.")
+                }
 
             v_max = sum(p for p, h in rubrica.values())
-            
             st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
-            notas = {}
             
+            notas = {}
             for item, (p, help_t) in rubrica.items():
                 notas[item] = st.slider(f"**{item} ({p} pts)**", 0, p, 0, help=help_t, key=f"s_{item}")
 
             total = sum(notas.values())
             st.markdown(f"## Nota Final: {total} / {v_max}")
 
+            # --- TRAVA DE NOTA ZERO ---
             tem_zero = any(v == 0 for v in notas.values())
             conf_zero = True
             if tem_zero:
-                st.error("⚠️ Existem critérios com nota zero.")
+                st.error("⚠️ Atenção: Existem critérios com nota zero.")
                 conf_zero = st.checkbox("Confirmo que as notas zero são intencionais.")
 
-            if st.button("🚀 GRAVAR AVALIAÇÃO"):
+            if st.button("🚀 GRAVAR AVALIAÇÃO NO SISTEMA"):
                 if tem_zero and not conf_zero:
-                    st.warning("Confirme as notas zero antes de gravar.")
+                    st.warning("Marque o checkbox de confirmação para as notas zero.")
                 else:
                     try:
                         df_at = conn.read(worksheet="Respostas", ttl=0)
@@ -150,10 +179,10 @@ else:
                         }])
                         df_f = pd.concat([df_at, nova_l], ignore_index=True)
                         conn.update(worksheet="Respostas", data=df_f)
-                        st.success("✅ Gravado com sucesso!")
+                        st.success("✅ Avaliação gravada com sucesso!")
                         time.sleep(2)
                         st.rerun()
                     except:
-                        st.error("Erro de conexão.")
+                        st.error("Erro de conexão. Verifique as Secrets.")
 
         formulario_avaliacao()
