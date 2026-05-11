@@ -107,7 +107,7 @@ else:
 
         @st.fragment
         def formulario_avaliacao():
-            # --- DEFINIÇÃO DAS RUBRICAS DETALHADAS ---
+            # --- DEFINIÇÃO DAS RUBRICAS DETALHADAS COM INTERVALO DE TEMPO ---
             if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
                 rubrica = {
                     "Tema": (3, "Avalie a clareza, delimitação e a atualidade do tema proposto."),
@@ -120,7 +120,7 @@ else:
                     "Apresentação Oral": (10, "Domínio de conteúdo, postura e clareza na fala."),
                     "Coerência": (10, "Lógica entre introdução, objetivos e métodos."),
                     "Qualidade Visual": (9, "Organização dos slides e recursos visuais."),
-                    "Tempo": (1, "Respeito ao limite de 10 minutos de apresentação.")
+                    "Tempo": (1, "Respeito ao intervalo de 8 a 10 minutos de apresentação.")
                 }
             elif "TCC II" in turma_bruta:
                 rubrica = {
@@ -133,9 +133,9 @@ else:
                     "Apresentação Oral": (10, "Segurança na defesa dos resultados."),
                     "Coerência": (10, "União lógica de todas as partes do trabalho final."),
                     "Qualidade Visual": (9, "Profissionalismo na apresentação visual."),
-                    "Tempo": (1, "Respeito ao limite de 15 minutos de apresentação.")
+                    "Tempo": (1, "Respeito ao intervalo de 12 a 15 minutos de apresentação.")
                 }
-            else: # Padronização para MCM V e outras turmas
+            else: # MCM V e outras
                 rubrica = {
                     "Resumo/Introdução": (10, "Síntese, fundamentação e clareza inicial."),
                     "Metodologia": (10, "Rigor na descrição dos métodos e materiais."),
@@ -144,7 +144,7 @@ else:
                     "Arguição": (10, "Segurança e clareza nas respostas à banca."),
                     "Apresentação Oral": (10, "Domínio de conteúdo e postura."),
                     "Qualidade Visual": (10, "Estética e organização dos slides."),
-                    "Tempo": (10, "Respeito ao limite de 15 minutos de apresentação.")
+                    "Tempo": (10, "Respeito ao intervalo de 12 a 15 minutos de apresentação.")
                 }
 
             v_max = sum(p for p, h in rubrica.values())
