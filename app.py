@@ -105,7 +105,7 @@ else:
             st.write("### 📝 Critérios de Avaliação")
             notas = {}
             
-            # --- DEFINIÇÃO DAS RUBRICAS ---
+            # --- DEFINIÇÃO DAS RUBRICAS (CORRIGIDO TCC II) ---
             if "TCC I" in turma_bruta and "TCC II" not in turma_bruta:
                 rubrica = {
                     "Tema": (3, "Avalie a clareza, delimitação e a atualidade do tema proposto."),
@@ -131,9 +131,9 @@ else:
                     "Apresentação Oral": (10, "Segurança na defesa dos resultados."),
                     "Coerência": (10, "União lógica de todas as partes do trabalho final."),
                     "Qualidade Visual": (9, "Profissionalismo na apresentação visual."),
-                    "Tempo": (1, "Cumprimento rigoroso do tempo.")
+                    "Tempo": (1, "Cumprimento rigoroso do tempo limite de apresentação.")
                 }
-            else: # Padronização para MCM V e outras turmas
+            else:
                 rubrica = {
                     "Resumo/Introdução": (10, "Síntese, fundamentação e clareza inicial."),
                     "Metodologia": (10, "Rigor na descrição dos métodos e materiais."),
@@ -142,7 +142,7 @@ else:
                     "Arguição": (10, "Segurança e clareza nas respostas à banca."),
                     "Apresentação Oral": (10, "Domínio de conteúdo e postura."),
                     "Qualidade Visual": (10, "Estética e organização dos slides."),
-                    "Tempo": (10, "Cumprimento do cronograma de apresentação.")
+                    "Tempo": (10, "Respeito ao limite de tempo da apresentação.")
                 }
 
             for item, (p, help_t) in rubrica.items():
