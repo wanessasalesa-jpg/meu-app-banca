@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
 import pytz 
 
@@ -91,10 +91,10 @@ pendentes = df_escalacao[(df_escalacao['Email'].str.lower() == st.session_state.
 
 if pendentes.empty:
     st.balloons()
-    st.success("🎉 Todas as avaliações concluídas!")
+    st.success("🎉 Todas as suas avaliações foram enviadas com sucesso!")
 else:
     lista_grupos = pendentes["Alunos"].tolist()
-    aluno_selecionado = st.selectbox("🎯 Escolha o Grupo:", [""] + lista_grupos)
+    aluno_selecionado = st.selectbox("🎯 Escolha o Grupo para Avaliar:", [""] + lista_grupos)
 
     if aluno_selecionado:
         dados = pendentes[pendentes["Alunos"] == aluno_selecionado].iloc[0]
@@ -107,9 +107,7 @@ else:
 
         @st.fragment
         def formulario_avaliacao():
-            # --- DEFINIÇÃO DAS RUBRICAS COM INTERVALOS DE TEMPO CORRIGIDOS ---
             if "TCC I" in turma_bruta or "MCM IV" in turma_bruta:
-                # TCC I e MCM IV: 10 a 15 minutos
                 rubrica = {
                     "Tema": (3, "Avalie a clareza, delimitação e a atualidade do tema proposto."),
                     "Resumo": (1, "Verifique se contém objetivo, método, resultados esperados e palavras-chave."),
@@ -124,7 +122,6 @@ else:
                     "Tempo": (1, "Respeito ao intervalo de 10 a 15 minutos de apresentação.")
                 }
             elif "TCC II" in turma_bruta or "MCM V" in turma_bruta:
-                # TCC II e MCM V: 15 a 20 minutos
                 rubrica = {
                     "Tema/Resumo": (4, "Qualidade técnica do resumo e aderência ao tema."),
                     "Introdução": (5, "Fundamentação teórica sólida e revisão de literatura."),
@@ -138,15 +135,14 @@ else:
                     "Tempo": (1, "Respeito ao intervalo de 15 a 20 minutos de apresentação.")
                 }
             else:
-                # Padrão para outras turmas
                 rubrica = {
-                    "Resumo/Introdução": (10, "Síntese, fundamentação e clareza inicial."),
-                    "Metodologia": (10, "Rigor na descrição dos métodos e materiais."),
-                    "Resultados/Discussão": (20, "Análise de dados e confrontação com literatura."),
-                    "Redação/ABNT": (10, "Gramática, ortografia e normas técnicas."),
-                    "Arguição": (10, "Segurança e clareza nas respostas à banca."),
+                    "Resumo/Introdução": (10, "Síntese, fundamentação e clareza."),
+                    "Metodologia": (10, "Rigor na descrição dos métodos."),
+                    "Resultados/Discussão": (20, "Análise de dados e confrontação."),
+                    "Redação/ABNT": (10, "Gramática e normas técnicas."),
+                    "Arguição": (10, "Segurança e clareza nas respostas."),
                     "Apresentação Oral": (10, "Domínio de conteúdo e postura."),
-                    "Qualidade Visual": (10, "Estética e organização dos slides."),
+                    "Qualidade Visual": (10, "Estética e organização."),
                     "Tempo": (10, "Respeito ao intervalo de 15 a 20 minutos de apresentação.")
                 }
 
@@ -170,21 +166,26 @@ else:
                 if tem_zero and not conf_zero:
                     st.warning("Confirme as notas zero antes de gravar.")
                 else:
-                    try:
-                        df_at = conn.read(worksheet="Respostas", ttl=0)
-                        nova_l = pd.DataFrame([{
-                            "Avaliador": nome_avaliador, 
-                            "Email_Avaliador": st.session_state.email, 
-                            "Alunos": aluno_selecionado, 
-                            "Nota_Final": total, 
-                            "Data_Hora": datetime.now(fuso_bruta).strftime("%d/%m/%Y %H:%M")
-                        }])
-                        df_f = pd.concat([df_at, nova_l], ignore_index=True)
-                        conn.update(worksheet="Respostas", data=df_f)
-                        st.success("✅ Gravado com sucesso!")
-                        time.sleep(2)
-                        st.rerun()
-                    except:
-                        st.error("Erro de conexão.")
+                    placeholder = st.empty()
+                    with placeholder.container():
+                        try:
+                            df_at = conn.read(worksheet="Respostas", ttl=0)
+                            nova_l = pd.DataFrame([{
+                                "Avaliador": nome_avaliador, 
+                                "Email_Avaliador": st.session_state.email, 
+                                "Alunos": aluno_selecionado, 
+                                "Nota_Final": total, 
+                                "Data_Hora": datetime.now(fuso_bruta).strftime("%d/%m/%Y %H:%M")
+                            }])
+                            df_f = pd.concat([df_at, nova_l], ignore_index=True)
+                            conn.update(worksheet="Respostas", data=df_f)
+                            
+                            # SUCESSO REAL
+                            st.balloons()
+                            st.success("✅ Avaliação gravada com sucesso! Retornando...")
+                            time.sleep(3)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao salvar: Verifique sua conexão com a planilha.")
 
         formulario_avaliacao()
