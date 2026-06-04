@@ -42,6 +42,16 @@ except:
     time.sleep(1)
     st.rerun()
 
+# --- TRATAMENTO SEGURO DA ABA DE RESPOSTAS ---
+colunas_respostas_obrigatorias = ["Avaliador", "Email_Avaliador", "Alunos", "Nota_Final", "Papel", "Data_Hora"]
+try:
+    df_respostas = get_data("Respostas", ttl_sec=0)
+    # Se a tabela vier vazia ou sem as colunas necessárias, estruturamos corretamente
+    if df_respostas.empty or not all(col in df_respostas.columns for col in colunas_respostas_obrigatorias):
+        df_respostas = pd.DataFrame(columns=colunas_respostas_obrigatorias)
+except:
+    df_respostas = pd.DataFrame(columns=colunas_respostas_obrigatorias)
+
 # --- TRAVA DE LOGOUT E IDENTIFICAÇÃO DE PAPEL ---
 if 'email' not in st.session_state:
     if "user" in st.query_params:
@@ -126,46 +136,30 @@ with col_exit:
         st.query_params.clear()
         st.rerun()
 
-# Carregar respostas anteriores para filtro de pendências
-try:
-    df_respostas = get_data("Respostas", ttl_sec=0)
-except:
-    df_respostas = pd.DataFrame()
-
 # FILTRAGEM INTELIGENTE DE GRUPOS PENDENTES
 pendentes = pd.DataFrame()
 if not df_escalacao.empty:
     if eh_orientador:
-        # Pega os grupos onde o professor é orientador
         possiveis = df_escalacao[df_escalacao['Email_Orientador'].astype(str).str.lower() == email_user].copy()
         linhas_pendentes = []
         for idx, row in possiveis.iterrows():
             alunos_grupo = [a.strip() for a in str(row['Alunos']).split(",") if a.strip()]
-            # Verifica quais alunos deste grupo o orientador JÁ avaliou
-            if not df_respostas.empty and "Alunos" in df_respostas.columns and "Email_Avaliador" in df_respostas.columns and "Papel" in df_respostas.columns:
-                avaliados = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Orientador")]["Alunos"].tolist()
-                alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
-            else:
-                alunos_restantes = alunos_grupo
+            avaliados = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Orientador")]["Alunos"].tolist()
+            alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
             
-            # Se ainda existem alunos sem nota no grupo, o grupo continua visível
             if alunos_restantes:
                 linhas_pendentes.append(row)
-        if linhas_pendentes:
-            pendentes = pd.DataFrame(linhas_pendentes)
+        if lines_pendentes := linhas_pendentes:
+            pendentes = pd.DataFrame(lines_pendentes)
     else:
-        # Se for banca, o grupo todo é avaliado de uma vez só
         cond_banca = (
             (df_escalacao['Email_Avaliador_1'].astype(str).str.lower() == email_user) | 
             (df_escalacao['Email_Avaliador_2'].astype(str).str.lower() == email_user) | 
             (df_escalacao['Email_suplente'].astype(str).str.lower() == email_user)
         )
         possiveis = df_escalacao[cond_banca].copy()
-        if not df_respostas.empty and "Alunos" in df_respostas.columns and "Email_Avaliador" in df_respostas.columns and "Papel" in df_respostas.columns:
-            feitos = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Banca")]["Alunos"].tolist()
-            pendentes = possiveis[~possiveis['Alunos'].isin(feitos)].copy()
-        else:
-            pendentes = possiveis
+        feitos = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Banca")]["Alunos"].tolist()
+        pendentes = possiveis[~possiveis['Alunos'].isin(feitos)].copy()
 
 if pendentes.empty:
     st.balloons()
@@ -210,22 +204,23 @@ else:
         if not banca_liberada:
             st.warning(msg_trava)
         else:
-            # SE FOR ORIENTADOR, ATIVA A SELEÇÃO INDIVIDUAL DE ALUNO DO GRUPO
             aluno_alvo_final = aluno_selecionado
             exibir_formulario = True
 
             if eh_orientador:
-                lista_alunos_individuais = [a.strip() for a in str(aluno_selecionado).split(",") if a.strip()]
-                # Filtra removendo os que já ganharam nota do orientador
-                if not df_respostas.empty and "Alunos" in df_respostas.columns:
+                if "MCM V" in turma_bruta or "MCM 5" in turma_bruta:
+                    exibir_formulario = False
+                    st.warning("⚠️ Nota do orientador não aplicável para esta turma. A turma MCM V possui 100% da nota final atribuída exclusivamente pela banca examinadora.")
+                else:
+                    lista_alunos_individuais = [a.strip() for a in str(aluno_selecionado).split(",") if a.strip()]
                     avaliados_na_aba = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Orientador")]["Alunos"].tolist()
                     lista_alunos_individuais = [a for a in lista_alunos_individuais if a not in avaliados_na_aba]
-                
-                if lista_alunos_individuais:
-                    aluno_alvo_final = st.selectbox("👤 Selecione o Aluno para atribuir a nota individual:", lista_alunos_individuais)
-                else:
-                    exibir_formulario = False
-                    st.success("Todos os alunos deste grupo já foram avaliados por você!")
+                    
+                    if lista_alunos_individuais:
+                        aluno_alvo_final = st.selectbox("👤 Selecione o Aluno para atribuir a nota individual:", lista_alunos_individuais)
+                    else:
+                        exibir_formulario = False
+                        st.success("Todos os alunos deste grupo já foram avaliados por você!")
 
             if exibir_formulario:
                 @st.fragment
@@ -242,7 +237,7 @@ else:
                                 "Desenv. - Relação com Orientador / Diálogo": (5, "Relação colaborativa, com boa abertura ao diálogo e aceitação de sugestões[cite: 3]."),
                                 "Desenv. - Desempenho e Cumprimento de Tarefas": (5, "Desempenho satisfatório, com atividades realizadas de forma competente e engajada[cite: 3]."),
                                 "Desenv. - Pontualidade e Compromisso": (5, "Pontualidade é mantida consistentemente, demonstrando compromisso com o processo[cite: 3]."),
-                                "Desenv. - Resp. com Processo de Aprendizagem": (5, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado[cite: 3]."),
+                                "Desenv. - Resp. com Processo de Aprendizagem": (5, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e aprimoramento[cite: 3]."),
                                 "Texto - Justificativa do Estudo": (6, "Apresenta com clareza a relevância científica, social ou profissional vinculada ao problema[cite: 9]."),
                                 "Texto - Objetivo Geral e Específicos": (6, "Objetivo geral claro e coerente com a justificativa; específicos bem articulados[cite: 9]."),
                                 "Texto - Fundamentação Teórica / Referências": (6, "Referencial teórico relevante, atualizado (últimos 5 anos em sua maioria) e articulado[cite: 9]."),
@@ -252,33 +247,30 @@ else:
                             }
                         elif "TCC I" in turma_bruta or "TCC 1" in turma_bruta:
                             rubrica = {
-                                "Discente - Envolvimento e Responsabilidade": (5, "Participação proativa, com alta responsabilidade e comprometimento na elaboração do projeto[cite: 19]."),
+                                "Discente - Envolvimento e Responsabilidade": (5, "Participação proativa, demonstrou alta responsabilidade e comprometimento no processo[cite: 19]."),
                                 "Discente - Relação com Orientador / Diálogo": (5, "Relação colaborativa, com boa abertura ao diálogo e aceitação de sugestões[cite: 19]."),
-                                "Discente - Desempenho / Cumprimento de Tarefas": (4, "Desempenho satisfatório, com atividades de forma competente e engajada[cite: 19]."),
-                                "Discente - Pontualidade e Compromisso": (3, "Pontualidade é mantida consistentemente, demonstrando compromisso com os prazos[cite: 19]."),
-                                "Discente - Resp. com Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprimoramento[cite: 19]."),
-                                "Projeto - Formulação do Problema e Justificativa": (5, "Problema excepcionalmente formulado, e a justificativa é altamente persuasiva, atualizada e relevante[cite: 22]."),
-                                "Projeto - Objetivos e Hipóteses": (4, "Objetivos bem formulados e alinhados, e hipóteses pertinentes e testáveis[cite: 22]."),
-                                "Projeto - Revisão de Literatura": (4, "Revisão abrangente, crítica e que identifica claramente a relevância do estudo[cite: 22]."),
-                                "Projeto - Metodologia e ABNT": (4, "Metodologia detalhada e abrangente; projeto formatado conforme norma ABNT[cite: 22]."),
-                                "Projeto - Considerações Éticas e Viabilidade": (3, "Considerações éticas discutidas apropriadamente e viabilidade do estudo bem abordada[cite: 22].")
+                                "Discente - Desempenho / Cumprimento de Tarefas": (4, "Desempenho satisfatório, com atividades realizadas de forma competente e engajada[cite: 19]."),
+                                "Discente - Pontualidade e Compromisso": (3, "Pontualidade é mantida consistentemente, demonstrando compromisso com o processo[cite: 19]."),
+                                "Discente - Resp. com Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e de aprimoramento[cite: 19]."),
+                                "Projeto - Formulação do Problema e Justificativa": (5, "Problema de pesquisa é excepcionalmente formulado, e a justificativa é altamente persuasiva, atualizada e relevante[cite: 22]."),
+                                "Projeto - Objetivos e Hipóteses": (4, "Objetivos são bem formulados e alinhados, e as hipóteses (quando aplicáveis) são pertinentes e testáveis[cite: 22]."),
+                                "Projeto - Revisão de Literatura": (4, "Revisão de literatura é abrangente, crítica e identifica claramente a relevância do estudo[cite: 22]."),
+                                "Projeto - Metodologia e ABNT": (4, "Metodologia é detalhada e abrangente, o que proporciona uma compreensão completa; projeto formatado conforme ABNT[cite: 22]."),
+                                "Projeto - Considerações Éticas e Viabilidade": (3, "Considerações éticas são discutidas de maneira apropriada, e a viabilidade do estudo é abordada[cite: 22].")
                             }
                         elif "TCC II" in turma_bruta or "TCC 2" in turma_bruta:
                             rubrica = {
-                                "Discente - Envolvimento e Responsabilidade": (5, "Participação proativa, com alta responsabilidade e comprometimento na elaboração do artigo[cite: 16]."),
+                                "Discente - Envolvimento e Responsabilidade": (5, "Participação proativa, demonstrou alta responsabilidade e comprometimento no processo[cite: 16]."),
                                 "Discente - Relação com Orientador / Diálogo": (5, "Relação colaborativa, com boa abertura ao diálogo e aceitação de sugestões[cite: 16]."),
                                 "Discente - Desempenho / Cumprimento de Tarefas": (4, "Desempenho satisfatório, com atividades realizadas de forma competente e engajada[cite: 16]."),
-                                "Discente - Pontualidade e Compromisso": (3, "Pontualidade mantida consistentemente, demonstrando compromisso com o processo[cite: 16]."),
-                                "Discente - Resp. com Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprimoramento[cite: 16]."),
+                                "Discente - Pontualidade e Compromisso": (3, "Pontualidade é mantida consistentemente, o que demonstra compromisso com o processo[cite: 16]."),
+                                "Discente - Resp. com Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e de aprimoramento[cite: 16]."),
                                 "Artigo - Estruturação e Escrita Científica": (5, "Estrutura adequada, com fluidez, concisão e excelência na redação científica[cite: 13]."),
                                 "Artigo - Fundamentação e Atualização Bibliográfica": (4, "Fundamentação crítica, bem estruturada e com autores atuais e pertinentes à área médica[cite: 13]."),
                                 "Artigo - Apresentação e Discussão dos Resultados": (4, "Resultados apresentados com clareza, com discussão crítica e integração aos achados da literatura[cite: 13]."),
                                 "Artigo - Rigor Metodológico": (4, "Métodos bem descritos, compatíveis com o delineamento e objetivos do estudo[cite: 13]."),
-                                "Artigo - Conclusão e Relevância Científica": (3, "Conclusão clara, alinhada aos objetivos, com destaque à relevância e aplicabilidade prática[cite: 13].")
+                                "Artigo - Conclusão e Relevância Científica": (3, "Conclusão clara, alinhada aos objetivos e resultados, com destaque à relevância científica e aplicabilidade prática[cite: 13].")
                             }
-                        else:
-                            st.warning("⚠️ Nota do orientador não aplicável para esta turma (Ex: MCM V tem 100% da nota atribuída pela banca).")
-                            return
                     
                     # --- FLUXO 2: VISÃO DA BANCA AVALIADORA ---
                     else:
@@ -338,6 +330,9 @@ else:
                             with placeholder.container():
                                 try:
                                     df_at = conn.read(worksheet="Respostas", ttl=0)
+                                    if df_at.empty or not all(col in df_at.columns for col in colunas_respostas_obrigatorias):
+                                        df_at = pd.DataFrame(columns=colunas_respostas_obrigatorias)
+                                    
                                     nova_l = pd.DataFrame([{
                                         "Avaliador": nome_completo_docente, 
                                         "Email_Avaliador": email_user, 
