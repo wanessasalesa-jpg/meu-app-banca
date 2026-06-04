@@ -120,15 +120,12 @@ elif verificar_presenca_email(email_user, c_sup_email):
 nome_exibicao = tratar_nome_curto(nome_completo_docente)
 
 # --- DEFINIÇÃO DINÂMICA DE CORES (CSS FORÇADO) ---
-# Azul escuro institucional para banca, Verde floresta escuro acadêmico para orientação
 cor_primaria = "#002147" if not eh_orientador else "#1b4d3e"
 st.markdown(f"""
     <style>
     header {{visibility: hidden !important;}}
     #MainMenu {{visibility: hidden !important;}}
-    footer {{visibility: hidden !important;}}
-    
-    /* Forçar a cor do botão principal de gravação */
+    footer {{visibility: hidden;}}
     .stButton button {{
         width: 100% !important;
         border-radius: 10px !important;
@@ -138,8 +135,6 @@ st.markdown(f"""
         font-weight: bold !important;
         border: none !important;
     }}
-    
-    /* Adicionar uma barra sutil de identificação de cor no topo do app */
     .stApp {{
         border-top: 8px solid {cor_primaria} !important;
     }}
@@ -280,22 +275,24 @@ else:
                 def formulario_avaliacao(aluno_para_salvar):
                     rubrica = {}
                     
+                    # --- FLUXO 1: VISÃO DO ORIENTADOR ---
                     if eh_orientador:
                         st.info(f"🌱 Avaliando individualmente o discente: **{aluno_para_salvar}**")
                         
                         if "MCM IV" in turma_bruta or "MCM 4" in turma_bruta:
                             rubrica = {
-                                "Desenv. - Envolvimento e Responsabilidade": (5, "Participação proativa, demonstrando alta responsabilidade e comprometimento."),
+                                "Desenv. - Envolvimento e Responsabilidade": (5, "Participação proativa, demonstrando alta responsabilidade e comprometimento no processo de elaboração."),
                                 "Desenv. - Relação com Orientador / Diálogo": (5, "Relação colaborativa, com boa abertura ao diálogo e aceitação de sugestões."),
                                 "Desenv. - Desempenho e Cumprimento de Tarefas": (5, "Desempenho satisfatório, com atividades realizadas de forma competente e engajada."),
                                 "Desenv. - Pontualidade e Compromisso": (5, "Pontualidade é mantida consistentemente, demonstrando compromisso com o processo."),
-                                "Desenv. - Resp. com Processo de Aprendizagem": (5, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e aprimoramento."),
-                                "Texto - Justificativa do Estudo": (6, "Apresenta com clareza a relevância científica, social ou profissional vinculada ao problema."),
-                                "Texto - Objetivo Geral e Específicos": (6, "Objetivo geral claro e coerente com a justificativa; específicos bem articulados."),
-                                "Texto - Fundamentação Teórica / Referências": (6, "Referencial teórico relevante, atualizado e articulado ao tema."),
+                                "Desenv. - Responsabilidade com a Aprendizagem": (5, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e aprimoramento."),
+                                "Texto - Justificativa do Estudo": (6, "Apresenta com clareza a relevância científica, social ou profissional; bem estruturada e relacionada ao problema."),
+                                "Texto - Objetivo Geral e Específicos": (6, "Objetivo geral claro, coerente com a justificativa; objetivos específicos bem formulados e articulados."),
+                                "Texto - Fundamentação Teórica / Referências": (6, "Referencial teórico relevante, atualizado (últimos 5 anos em sua maioria) e articulado ao tema."),
                                 "Texto - Metodologia Proposta": (6, "Método bem descrito, adequado aos objetivos, com definição de tipo de estudo, população e análise."),
                                 "Texto - Cronograma de Execução": (3, "Cronograma bem estruturado, com etapas claras e prazos viáveis."),
-                                "Texto - Estrutura, Linguagem e Formatação": (3, "Texto bem escrito, estruturado, seguindo as normas (ABNT ou Vancouver).")
+                                "Texto - Estrutura, Linguagem e Formatação": (3, "Texto bem escrito, estruturado, sem erros relevantes; segue as normas (ABNT ou Vancouver)."),
+                                "Relatório - Relatório de Pesquisa": (10, "Apreciação técnica do orientador sobre o documento final de consolidação dos dados compilados pelo discente.")
                             }
                         elif "TCC I" in turma_bruta or "TCC 1" in turma_bruta:
                             rubrica = {
@@ -303,7 +300,7 @@ else:
                                 "Discente - Relação com Orientador / Diálogo": (5, "Relação colaborativa, com boa abertura ao diálogo e aceitação de sugestões."),
                                 "Discente - Desempenho / Cumprimento de Tarefas": (4, "Desempenho satisfatório, com atividades realizadas de forma competente e engajada."),
                                 "Discente - Pontualidade e Compromisso": (3, "Pontualidade é mantida consistentemente, demonstrando compromisso com os prazos."),
-                                "Discente - Resp. com Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e de aprimoramento."),
+                                "Responsabilidade com a Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e de aprimoramento."),
                                 "Projeto - Formulação do Problema e Justificativa": (5, "Problema de pesquisa é excepcionalmente formulado, e a justificativa é altamente persuasiva, atualizada e relevante."),
                                 "Projeto - Objetivos e Hipóteses": (4, "Objetivos são bem formulados e alinhados, e as hipóteses são pertinentes e testáveis."),
                                 "Projeto - Revisão de Literatura": (4, "Revisão de literatura é abrangente, crítica e identifica claramente a relevância do estudo na literatura existente."),
@@ -316,16 +313,25 @@ else:
                                 "Discente - Relação com Orientador / Diálogo": (5, "Relação colaborativa, com boa abertura ao diálogo e aceitação de sugestões."),
                                 "Discente - Desempenho / Cumprimento de Tarefas": (4, "Desempenho satisfatório, com atividades realizadas de forma competente e engajada."),
                                 "Discente - Pontualidade e Compromisso": (3, "Pontualidade é mantida consistentemente, o que demonstra compromisso com o processo."),
-                                "Discente - Resp. com Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e de aprimoramento."),
+                                "Responsabilidade com a Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e de aprimoramento."),
                                 "Artigo - Estruturação e Escrita Científica": (5, "Estrutura adequada, com fluidez, concisão e excelência na redação científica."),
                                 "Artigo - Fundamentação e Atualização Bibliográfica": (4, "Fundamentação crítica, bem estruturada e com autores atuais e pertinentes à área médica."),
                                 "Artigo - Apresentação e Discussão dos Resultados": (4, "Resultados apresentados com clareza, com discussão crítica e integração aos achados da literatura."),
                                 "Artigo - Rigor Metodológico": (4, "Métodos bem descritos, compatíveis com o delineamento e objetivos do estudo."),
                                 "Artigo - Conclusão e Relevância Científica": (3, "Conclusão clara, alinhada aos objetivos e resultados, com destaque à relevância científica e aplicabilidade prática.")
                             }
+                    
+                    # --- FLUXO 2: VISÃO DA BANCA AVALIADORA ---
                     else:
                         st.info("🎓 Você está visualizando a Rubrica de Avaliação da Banca (Nota para o Grupo todo).")
-                        if "TCC I" in turma_bruta or "TCC 1" in turma_bruta or "MCM IV" in turma_bruta or "MCM 4" in turma_bruta:
+                        
+                        if "MCM IV" in turma_bruta or "MCM 4" in turma_bruta:
+                            rubrica = {
+                                "Delineamento - Rigor Científico e Metodologia": (10, "Adequação do desenho do estudo, viabilidade técnica e delineamento claro dos procedimentos propostos."),
+                                "Apresentação Oral - Clareza e Domínio": (10, "Domínio conceitual do conteúdo exposto, postura, uso do tempo regulamentar e clareza na defesa oral."),
+                                "Coerência - Estrutura Geral do Projeto": (10, "Lógica interna do manuscrito, alinhamento fluido entre a justificativa, os objetivos e o método.")
+                            }
+                        elif "TCC I" in turma_bruta or "TCC 1" in turma_bruta:
                             rubrica = {
                                 "Tema": (3, "Clareza, delimitação e a atualidade do tema proposto."),
                                 "Resumo": (1, "Objetivo, método, resultados esperados e palavras-chave."),
@@ -376,7 +382,6 @@ else:
                         if tem_zero and not conf_zero:
                             st.warning("Confirme as notas zero antes de gravar.")
                         else:
-                            # Caixa invisível de processamento para sumir com o código da tela ao salvar
                             with st.spinner("Gravando notas e sincronizando base de dados..."):
                                 try:
                                     st.cache_data.clear()
@@ -397,7 +402,7 @@ else:
                                     
                                     st.balloons()
                                     st.success(f"✅ Avaliação de {tratar_nome_curto(aluno_para_salvar)} gravada com sucesso!")
-                                    time.sleep(1)
+                                    time.sleep(1.5)
                                     st.rerun()
                                 except:
                                     time.sleep(1)
