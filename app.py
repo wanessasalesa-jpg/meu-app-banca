@@ -119,13 +119,33 @@ elif verificar_presenca_email(email_user, c_sup_email):
 
 nome_exibicao = tratar_nome_curto(nome_completo_docente)
 
-# --- DEFINIÇÃO DINÂMICA DE CORES (CSS FORÇADO) ---
-cor_primaria = "#002147" if not eh_orientador else "#1b4d3e"
+# --- DEFINIÇÃO DINÂMICA DE CORES (CSS TOTALMENTE REESTRUTURADO) ---
+# Azul escuro institucional para banca, Pink marcante para orientação
+cor_primaria = "#002147" if not eh_orientador else "#FF1493"
+cor_texto_bloco = "#ffffff"
+
 st.markdown(f"""
     <style>
     header {{visibility: hidden !important;}}
     #MainMenu {{visibility: hidden !important;}}
     footer {{visibility: hidden;}}
+    
+    /* Injeção de bloco colorido imponente no cabeçalho */
+    .bloco-cabecalho {{
+        background-color: {cor_primaria} !important;
+        padding: 25px !important;
+        border-radius: 12px !important;
+        color: {cor_texto_bloco} !important;
+        margin-bottom: 25px !important;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.1) !important;
+    }}
+    .bloco-cabecalho h1, .bloco-cabecalho h3, .bloco-cabecalho p {{
+        color: {cor_texto_bloco} !important;
+        margin: 0 !important;
+        padding: 2px 0 !important;
+    }}
+    
+    /* Estilização forçada de botões do sistema */
     .stButton button {{
         width: 100% !important;
         border-radius: 10px !important;
@@ -135,17 +155,18 @@ st.markdown(f"""
         font-weight: bold !important;
         border: none !important;
     }}
-    .stApp {{
-        border-top: 8px solid {cor_primaria} !important;
-    }}
     </style>
     """, unsafe_allow_html=True)
 
-# CABEÇALHO DO APP APÓS LOGIN
-st.title("🎓 CRIVO")
-st.subheader("Sistema de Gestão de Bancas Acadêmicas" if not eh_orientador else "Sistema de Gestão de Orientações")
-st.caption("© 2026 Desenvolvido por Wanessa Sales de Almeida")
-st.divider()
+# CABEÇALHO EM BLOCO IMPACTANTE COM AS CORES DO PAPEL
+sub_titulo_texto = "Sistema de Gestão de Bancas Acadêmicas" if not eh_orientador else "Sistema de Gestão de Orientações"
+st.markdown(f"""
+    <div class="bloco-cabecalho">
+        <h1>🎓 CRIVO</h1>
+        <h3>{sub_titulo_texto}</h3>
+        <p style="font-size: 0.85em; opacity: 0.8;">© 2026 Desenvolvido por Wanessa Sales de Almeida</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # --- FILTRAGEM DE GRUPOS PENDENTES EM TEMPO REAL ---
 pendentes = pd.DataFrame()
@@ -285,7 +306,7 @@ else:
                                 "Desenv. - Relação com Orientador / Diálogo": (5, "Relação colaborativa, com boa abertura ao diálogo e aceitação de sugestões."),
                                 "Desenv. - Desempenho e Cumprimento de Tarefas": (5, "Desempenho satisfatório, com atividades realizadas de forma competente e engajada."),
                                 "Desenv. - Pontualidade e Compromisso": (5, "Pontualidade é mantida consistentemente, demonstrando compromisso com o processo."),
-                                "Desenv. - Responsabilidade com a Aprendizagem": (5, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e aprimoramento."),
+                                "Responsabilidade com a Aprendizagem": (5, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e aprimoramento."),
                                 "Texto - Justificativa do Estudo": (6, "Apresenta com clareza a relevância científica, social ou profissional; bem estruturada e relacionada ao problema."),
                                 "Texto - Objetivo Geral e Específicos": (6, "Objetivo geral claro, coerente com a justificativa; objetivos específicos bem formulados e articulados."),
                                 "Texto - Fundamentação Teórica / Referências": (6, "Referencial teórico relevante, atualizado (últimos 5 anos em sua maioria) e articulado ao tema."),
@@ -302,7 +323,7 @@ else:
                                 "Discente - Pontualidade e Compromisso": (3, "Pontualidade é mantida consistentemente, demonstrando compromisso com os prazos."),
                                 "Responsabilidade com a Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e de aprimoramento."),
                                 "Projeto - Formulação do Problema e Justificativa": (5, "Problema de pesquisa é excepcionalmente formulado, e a justificativa é altamente persuasiva, atualizada e relevante."),
-                                "Projeto - Objetivos e Hipóteses": (4, "Objetivos são bem formulados e alinhados, e as hipóteses são pertinentes e testáveis."),
+                                "Projeto - Objetivos e Hipóteses": (4, "Objetivos são bem formulados and alinhados, e as hipóteses são pertinentes e testáveis."),
                                 "Projeto - Revisão de Literatura": (4, "Revisão de literatura é abrangente, crítica e identifica claramente a relevância do estudo na literatura existente."),
                                 "Projeto - Metodologia e ABNT": (4, "Metodologia é detalhada e abrangente, proporcionando uma compreensão completa; projeto formatado conforme ABNT."),
                                 "Projeto - Considerações Éticas e Viabilidade": (3, "Considerações éticas são discutidas de maneira apropriada, e a viabilidade do estudo é abordada.")
