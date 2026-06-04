@@ -23,6 +23,12 @@ def tratar_nome_curto(nome_completo):
         return f"{partes[0]} {partes[1]}"
     return partes[0]
 
+# FUNÇÃO SEGURA PARA CHECAR E-MAIL LOWERCASE NA COLUNA (EVITA ATTRIBUTEERROR)
+def checar_email_na_coluna(email, df, coluna):
+    if coluna not in df.columns:
+        return False
+    return email in df[coluna].astype(str).str.strip().str.lower().unique()
+
 # 3. CONEXÃO COM GOOGLE SHEETS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -42,7 +48,6 @@ if 'email' not in st.session_state:
         st.session_state.email = st.query_params["user"]
 
 if 'email' not in st.session_state:
-    # CABEÇALHO PADRÃO ANTES DO LOGIN
     st.title("🎓 CRIVO")
     st.subheader("Sistema de Gestão de Bancas Acadêmicas")
     st.caption("© 2026 Desenvolvido por Wanessa Sales de Almeida")
@@ -54,10 +59,11 @@ if 'email' not in st.session_state:
         if email_raw:
             email_limpo = email_raw.lower()
             
-            id_banca1 = email_limpo in df_escalacao['Email_Avaliador_1'].str.lower().unique() if 'Email_Avaliador_1' in df_escalacao.columns else False
-            id_banca2 = email_limpo in df_escalacao['Email_Avaliador_2'].str.lower().unique() if 'Email_Avaliador_2' in df_escalacao.columns else False
-            id_suplente = email_limpo in df_escalacao['Email_suplente'].str.lower().unique() if 'Email_suplente' in df_escalacao.columns else False
-            id_orienta = email_limpo in df_escalacao['Email_Orientador'].str.lower().unique() if 'Email_Orientador' in df_escalacao.columns else False
+            # Validação blindada usando astype(str) para evitar o erro da imagem
+            id_banca1 = checar_email_na_coluna(email_limpo, df_escalacao, 'Email_Avaliador_1')
+            id_banca2 = checar_email_na_coluna(email_limpo, df_escalacao, 'Email_Avaliador_2')
+            id_suplente = checar_email_na_coluna(email_limpo, df_escalacao, 'Email_suplente')
+            id_orienta = checar_email_na_coluna(email_limpo, df_escalacao, 'Email_Orientador')
             
             if id_banca1 or id_banca2 or id_suplente or id_orienta:
                 st.session_state.email = email_limpo
@@ -73,18 +79,19 @@ eh_orientador = False
 eh_banca = False
 nome_completo_docente = ""
 
-if 'Email_Orientador' in df_escalacao.columns and email_user in df_escalacao['Email_Orientador'].str.lower().unique():
+# Identificação dinâmica do usuário logado
+if checar_email_na_coluna(email_user, df_escalacao, 'Email_Orientador'):
     eh_orientador = True
-    nome_completo_docente = df_escalacao[df_escalacao['Email_Orientador'].str.lower() == email_user]['Orientador'].iloc[0]
-elif 'Email_Avaliador_1' in df_escalacao.columns and email_user in df_escalacao['Email_Avaliador_1'].str.lower().unique():
+    nome_completo_docente = df_escalacao[df_escalacao['Email_Orientador'].astype(str).str.lower() == email_user]['Orientador'].iloc[0]
+elif checar_email_na_coluna(email_user, df_escalacao, 'Email_Avaliador_1'):
     eh_banca = True
-    nome_completo_docente = df_escalacao[df_escalacao['Email_Avaliador_1'].str.lower() == email_user]['Avaliador_1'].iloc[0]
-elif 'Email_Avaliador_2' in df_escalacao.columns and email_user in df_escalacao['Email_Avaliador_2'].str.lower().unique():
+    nome_completo_docente = df_escalacao[df_escalacao['Email_Avaliador_1'].astype(str).str.lower() == email_user]['Avaliador_1'].iloc[0]
+elif checar_email_na_coluna(email_user, df_escalacao, 'Email_Avaliador_2'):
     eh_banca = True
-    nome_completo_docente = df_escalacao[df_escalacao['Email_Avaliador_2'].str.lower() == email_user]['Avaliador_2'].iloc[0]
-elif 'Email_suplente' in df_escalacao.columns and email_user in df_escalacao['Email_suplente'].str.lower().unique():
+    nome_completo_docente = df_escalacao[df_escalacao['Email_Avaliador_2'].astype(str).str.lower() == email_user]['Avaliador_2'].iloc[0]
+elif checar_email_na_coluna(email_user, df_escalacao, 'Email_suplente'):
     eh_banca = True
-    nome_completo_docente = df_escalacao[df_escalacao['Email_suplente'].str.lower() == email_user]['Avaliador_Suplente'].iloc[0]
+    nome_completo_docente = df_escalacao[df_escalacao['Email_suplente'].astype(str).str.lower() == email_user]['Avaliador_Suplente'].iloc[0]
 
 nome_exibicao = tratar_nome_curto(nome_completo_docente)
 
@@ -125,18 +132,17 @@ with col_exit:
 # Filtragem de pendentes baseada no papel
 try:
     df_respostas = get_data("Respostas", ttl_sec=0)
-    # Filtra os trabalhos já feitos pelo e-mail e papel do avaliador atual
     feitos = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == ("Orientador" if eh_orientador else "Banca"))]["Alunos"].tolist()
 except:
     feitos = []
 
 if eh_orientador:
-    pendentes = df_escalacao[(df_escalacao['Email_Orientador'].str.lower() == email_user) & (~df_escalacao['Alunos'].isin(feitos))].copy()
+    pendentes = df_escalacao[(df_escalacao['Email_Orientador'].astype(str).str.lower() == email_user) & (~df_escalacao['Alunos'].isin(feitos))].copy()
 else:
     cond_banca = (
-        (df_escalacao['Email_Avaliador_1'].str.lower() == email_user) | 
-        (df_escalacao['Email_Avaliador_2'].str.lower() == email_user) | 
-        (df_escalacao['Email_suplente'].str.lower() == email_user)
+        (df_escalacao['Email_Avaliador_1'].astype(str).str.lower() == email_user) | 
+        (df_escalacao['Email_Avaliador_2'].astype(str).str.lower() == email_user) | 
+        (df_escalacao['Email_suplente'].astype(str).str.lower() == email_user)
     )
     pendentes = df_escalacao[cond_banca & (~df_escalacao['Alunos'].isin(feitos))].copy()
 
@@ -189,52 +195,52 @@ else:
                 
                 # --- FLUXO 1: VISÃO DO ORIENTADOR ---
                 if eh_orientador:
-                    st.info("🌱 Você está a visualizar a Rubrica de Orientação.")
+                    st.info("🌱 Você está visualizando a Rubrica de Orientação Oficial.")
                     
                     if "MCM IV" in turma_bruta or "MCM 4" in turma_bruta:
                         rubrica = {
-                            "Desenvolvimento - Envolvimento": (5, "Participação proativa e comprometimento."),
-                            "Desenvolvimento - Diálogo": (5, "Relação colaborativa e abertura a sugestões."),
-                            "Desenvolvimento - Tarefas": (5, "Cumprimento competente das tarefas."),
-                            "Desenvolvimento - Pontualidade": (5, "Pontualidade mantida consistentemente com os prazos."),
-                            "Desenvolvimento - Aprendizagem": (5, "Responsabilidade evidente em buscar aprimoramento."),
-                            "Projeto - Justificativa": (6, "Clareza da relevância científica, social ou profissional."),
-                            "Projeto - Objetivos": (6, "Geral claro e específicos bem articulados."),
-                            "Projeto - Fundamentação": (6, "Referencial teórico relevante e atualizado."),
-                            "Projeto - Metodologia": (6, "Método bem descrito e adequado aos objetivos."),
-                            "Projeto - Cronograma": (3, "Cronograma estruturado com prazos viáveis."),
-                            "Projeto - Formatação": (3, "Texto bem escrito seguindo as normas ABNT/Vancouver.")
+                            "Desenv. - Envolvimento e Responsabilidade": (5, "Participação proativa, demonstrando alta responsabilidade e comprometimento."),
+                            "Desenv. - Relação com Orientador / Diálogo": (5, "Relação colaborativa, com boa abertura ao diálogo e aceitação de sugestões."),
+                            "Desenv. - Desempenho e Cumprimento de Tarefas": (5, "Desempenho satisfatório, com atividades realizadas de forma competente e engajada."),
+                            "Desenv. - Pontualidade e Compromisso": (5, "Pontualidade é mantida consistentemente, demonstrando compromisso com o processo."),
+                            "Desenv. - Resp. com Processo de Aprendizagem": (5, "Responsabilidade evidente em buscar ativamente oportunidades de aprimoramento."),
+                            "Texto - Justificativa do Estudo": (6, "Apresenta com clareza a relevância científica, social ou profissional vinculada ao problema."),
+                            "Texto - Objetivo Geral e Específicos": (6, "Objetivo geral claro e coerente com a justificativa; específicos bem articulados."),
+                            "Texto - Fundamentação Teórica / Referências": (6, "Referencial teórico relevante, atualizado (últimos 5 anos em sua maioria) e articulado."),
+                            "Texto - Metodologia Proposta": (6, "Método bem descrito, adequado aos objetivos, com definição de tipo de estudo, população e análise."),
+                            "Texto - Cronograma de Execução": (3, "Cronograma bem estruturado, com etapas claras e prazos viáveis."),
+                            "Texto - Estrutura, Linguagem e Formatação": (3, "Texto bem escrito, estruturado, seguindo as normas (ABNT ou Vancouver).")
                         }
                     elif "TCC I" in turma_bruta or "TCC 1" in turma_bruta:
                         rubrica = {
-                            "Discente - Envolvimento": (5, "Envolvimento e responsabilidade no processo de elaboração."),
-                            "Discente - Diálogo": (5, "Relação colaborativa e aceitação de sugestões."),
-                            "Discente - Tarefas": (4, "Desempenho satisfatório e engajado nas atividades."),
-                            "Discente - Pontualidade": (3, "Pontualidade mantida consistentemente."),
-                            "Discente - Aprendizagem": (3, "Busca ativa por oportunidades de aprendizado."),
-                            "Projeto - Problema/Justificativa": (5, "Problema claramente formulado e relevância médica profunda."),
-                            "Projeto - Objetivos/Hipóteses": (4, "Objetivos bem formulados e alinhados ao problema."),
-                            "Projeto - Revisão Literatura": (4, "Revisão abrangente, crítica e fontes adequadas."),
-                            "Projeto - Metodologia/ABNT": (4, "Metodologia detalhada seguindo estritamente as normas."),
-                            "Projeto - Ética/Viabilidade": (3, "Considerações éticas e viabilidade discutidas apropriadamente.")
+                            "Discente - Envolvimento e Responsabilidade": (5, "Participação proativa, com alta responsabilidade e comprometimento na elaboração do projeto."),
+                            "Discente - Relação com Orientador / Diálogo": (5, "Relação colaborativa, com boa abertura ao diálogo e aceitação de sugestões."),
+                            "Discente - Desempenho / Cumprimento de Tarefas": (4, "Desempenho satisfatório, com atividades de forma competente e engajada."),
+                            "Discente - Pontualidade e Compromisso": (3, "Pontualidade é mantida consistentemente, demonstrando compromisso com os prazos."),
+                            "Discente - Resp. com Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprimoramento."),
+                            "Projeto - Formulação do Problema e Justificativa": (5, "Problema excepcionalmente formulado e justificativa altamente persuasiva, atualizada e relevante."),
+                            "Projeto - Objetivos e Hipóteses": (4, "Objetivos bem formulados e alinhados, e hipóteses pertinentes e testáveis."),
+                            "Projeto - Revisão de Literatura": (4, "Revisão abrangente, crítica e que identifica claramente a relevância do estudo."),
+                            "Projeto - Metodologia e ABNT": (4, "Metodologia detalhada e abrangente; projeto formatado estritamente conforme norma ABNT."),
+                            "Projeto - Considerações Éticas e Viabilidade": (3, "Considerações éticas discutidas apropriadamente e viabilidade do estudo bem abordada.")
                         }
                     elif "TCC II" in turma_bruta or "TCC 2" in turma_bruta:
                         rubrica = {
-                            "Discente - Envolvimento": (5, "Participação proativa e comprometimento na escrita do artigo."),
-                            "Discente - Diálogo": (5, "Relação colaborativa e aceitação de sugestões da orientação."),
-                            "Discente - Tarefas": (4, "Desempenho competente no cumprimento de prazos."),
-                            "Discente - Pontualidade": (3, "Pontualidade mantida consistentemente com as entregas."),
-                            "Discente - Aprendizagem": (3, "Responsabilidade evidente com o próprio aprimoramento."),
-                            "Artigo - Estrutura/Escrita": (5, "Organização científica excelente, fluidez e concisão."),
-                            "Artigo - Fundamentação": (4, "Fundamentação crítica com autores atuais na área médica."),
-                            "Artigo - Resultados": (4, "Apresentação clara com discussão crítica integrada à literatura."),
-                            "Artigo - Rigor Metodológico": (4, "Métodos bem descritos e compatíveis com o delineamento."),
-                            "Artigo - Conclusão/Relevância": (3, "Conclusão clara com aplicabilidade prática destacada.")
+                            "Discente - Envolvimento e Responsabilidade": (5, "Participação proativa, com alta responsabilidade e comprometimento na elaboração do artigo."),
+                            "Discente - Relação com Orientador / Diálogo": (5, "Relação colaborativa, com boa abertura ao diálogo e aceitação de sugestões."),
+                            "Discente - Desempenho / Cumprimento de Tarefas": (4, "Desempenho satisfatório, com atividades realizadas de forma competente e engajada."),
+                            "Discente - Pontualidade e Compromisso": (3, "Pontualidade mantida consistentemente, demonstrando compromisso com o processo."),
+                            "Discente - Resp. com Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprimoramento."),
+                            "Artigo - Estruturação e Escrita Científica": (5, "Estrutura adequada, com fluidez, concisão e excelência na redação científica."),
+                            "Artigo - Fundamentação e Atualização Bibliográfica": (4, "Fundamentação crítica, bem estruturada e com autores atuais e pertinentes à área médica."),
+                            "Artigo - Apresentação e Discussão dos Resultados": (4, "Resultados apresentados com clareza, com discussão crítica e integração à literatura."),
+                            "Artigo - Rigor Metodológico": (4, "Métodos bem descritos, compatíveis com o delineamento e objetivos do estudo."),
+                            "Artigo - Conclusão e Relevância Científica": (3, "Conclusão clara, alinhada aos objetivos, com destaque à relevância e aplicabilidade prática.")
                         }
                 
                 # --- FLUXO 2: VISÃO DA BANCA AVALIADORA ---
                 else:
-                    st.info("🎓 Você está a visualizar a Rubrica de Avaliação da Banca.")
+                    st.info("🎓 Você está visualizando a Rubrica de Avaliação da Banca.")
                     if "TCC I" in turma_bruta or "TCC 1" in turma_bruta or "MCM IV" in turma_bruta or "MCM 4" in turma_bruta:
                         rubrica = {
                             "Tema": (3, "Clareza, delimitação e a atualidade do tema proposto."),
@@ -245,7 +251,7 @@ else:
                             "Metodologia": (10, "Desenho do estudo, critérios e ética."),
                             "Referências": (1, "Uso de normas ABNT/Vancouver."),
                             "Apresentação Oral": (10, "Domínio de conteúdo, postura e clareza."),
-                            "Coerência": (10, "Lógica entre introdução, objectives e métodos."),
+                            "Coerência": (10, "Lógica entre introdução, objetivos e métodos."),
                             "Qualidade Visual": (9, "Organização dos slides e recursos."),
                             "Tempo": (1, "Intervalo de 10 a 15 minutos de apresentação.")
                         }
