@@ -119,20 +119,29 @@ elif verificar_presenca_email(email_user, c_sup_email):
 
 nome_exibicao = tratar_nome_curto(nome_completo_docente)
 
-# --- DEFINIÇÃO DINÂMICA DE CORES (CSS) ---
+# --- DEFINIÇÃO DINÂMICA DE CORES (CSS FORÇADO) ---
+# Azul escuro institucional para banca, Verde floresta escuro acadêmico para orientação
 cor_primaria = "#002147" if not eh_orientador else "#1b4d3e"
 st.markdown(f"""
     <style>
-    header {{visibility: hidden;}}
-    #MainMenu {{visibility: hidden;}}
-    footer {{visibility: hidden;}}
+    header {{visibility: hidden !important;}}
+    #MainMenu {{visibility: hidden !important;}}
+    footer {{visibility: hidden !important;}}
+    
+    /* Forçar a cor do botão principal de gravação */
     .stButton button {{
-        width: 100%;
-        border-radius: 10px;
-        height: 3.5em;
-        background-color: {cor_primaria};
-        color: white;
-        font-weight: bold;
+        width: 100% !important;
+        border-radius: 10px !important;
+        height: 3.5em !important;
+        background-color: {cor_primaria} !important;
+        color: white !important;
+        font-weight: bold !important;
+        border: none !important;
+    }}
+    
+    /* Adicionar uma barra sutil de identificação de cor no topo do app */
+    .stApp {{
+        border-top: 8px solid {cor_primaria} !important;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -158,7 +167,7 @@ if not df_escalacao.empty and c_alunos:
             
             if alunos_restantes:
                 linhas_pendentes.append(row)
-                total_pendencias_contador += len(alunos_restantes) # Conta discentes pendentes
+                total_pendencias_contador += len(alunos_restantes)
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
     else:
@@ -173,7 +182,7 @@ if not df_escalacao.empty and c_alunos:
         possiveis = df_escalacao[cond_banca].copy()
         items_feitos = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Banca")]["Alunos"].tolist()
         pendentes = possiveis[~possiveis[c_alunos].isin(items_feitos)].copy()
-        total_pendencias_contador = len(pendentes) # Conta bancas/grupos pendentes
+        total_pendencias_contador = len(pendentes)
 
 # --- AMBIENTE VISUAL DO DOCENTE COM BLOCO DE SAÍDA SEGURO ---
 col_user, col_exit = st.columns([3, 1])
@@ -201,9 +210,8 @@ if st.session_state.get("tentou_sair_com_pendencia", False):
             st.session_state.clear()
             st.query_params.clear()
             st.rerun()
-    st.stop() # Interrompe o app para focar no aviso
+    st.stop()
 
-# SEGUIMENTO DO FORMULÁRIO SE NÃO TENTOU SAIR
 if pendentes.empty:
     st.balloons()
     st.success("🎉 Todas as suas avaliações pendentes foram concluídas!")
@@ -272,7 +280,6 @@ else:
                 def formulario_avaliacao(aluno_para_salvar):
                     rubrica = {}
                     
-                    # --- FLUXO 1: VISÃO DO ORIENTADOR ---
                     if eh_orientador:
                         st.info(f"🌱 Avaliando individualmente o discente: **{aluno_para_salvar}**")
                         
@@ -316,8 +323,6 @@ else:
                                 "Artigo - Rigor Metodológico": (4, "Métodos bem descritos, compatíveis com o delineamento e objetivos do estudo."),
                                 "Artigo - Conclusão e Relevância Científica": (3, "Conclusão clara, alinhada aos objetivos e resultados, com destaque à relevância científica e aplicabilidade prática.")
                             }
-                    
-                    # --- FLUXO 2: VISÃO DA BANCA AVALIADORA ---
                     else:
                         st.info("🎓 Você está visualizando a Rubrica de Avaliação da Banca (Nota para o Grupo todo).")
                         if "TCC I" in turma_bruta or "TCC 1" in turma_bruta or "MCM IV" in turma_bruta or "MCM 4" in turma_bruta:
@@ -371,29 +376,31 @@ else:
                         if tem_zero and not conf_zero:
                             st.warning("Confirme as notas zero antes de gravar.")
                         else:
-                            try:
-                                st.cache_data.clear()
-                                df_at = conn.read(worksheet="Respostas", ttl=0)
-                                if df_at.empty or not all(col in df_at.columns for col in colunas_respostas_obrigatorias):
-                                    df_at = pd.DataFrame(columns=colunas_respostas_obrigatorias)
-                                
-                                nova_l = pd.DataFrame([{
-                                    "Avaliador": nome_completo_docente, 
-                                    "Email_Avaliador": email_user, 
-                                    "Alunos": aluno_para_salvar, 
-                                    "Nota_Final": total, 
-                                    "Papel": "Orientador" if eh_orientador else "Banca",
-                                    "Data_Hora": obter_agora().strftime("%d/%m/%Y %H:%M")
-                                }])
-                                df_f = pd.concat([df_at, nova_l], ignore_index=True)
-                                conn.update(worksheet="Respostas", data=df_f)
-                                
-                                st.balloons()
-                                st.success(f"✅ Avaliação de {tratar_nome_curto(aluno_para_salvar)} gravada com sucesso!")
-                                time.sleep(1.5)
-                                st.rerun()
-                            except:
-                                time.sleep(1)
-                                st.rerun()
+                            # Caixa invisível de processamento para sumir com o código da tela ao salvar
+                            with st.spinner("Gravando notas e sincronizando base de dados..."):
+                                try:
+                                    st.cache_data.clear()
+                                    df_at = conn.read(worksheet="Respostas", ttl=0)
+                                    if df_at.empty or not all(col in df_at.columns for col in colunas_respostas_obrigatorias):
+                                        df_at = pd.DataFrame(columns=colunas_respostas_obrigatorias)
+                                    
+                                    nova_l = pd.DataFrame([{
+                                        "Avaliador": nome_completo_docente, 
+                                        "Email_Avaliador": email_user, 
+                                        "Alunos": aluno_para_salvar, 
+                                        "Nota_Final": total, 
+                                        "Papel": "Orientador" if eh_orientador else "Banca",
+                                        "Data_Hora": obter_agora().strftime("%d/%m/%Y %H:%M")
+                                    }])
+                                    df_f = pd.concat([df_at, nova_l], ignore_index=True)
+                                    conn.update(worksheet="Respostas", data=df_f)
+                                    
+                                    st.balloons()
+                                    st.success(f"✅ Avaliação de {tratar_nome_curto(aluno_para_salvar)} gravada com sucesso!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                except:
+                                    time.sleep(1)
+                                    st.rerun()
 
                 formulario_avaliacao(aluno_alvo_final)
