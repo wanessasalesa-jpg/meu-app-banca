@@ -37,7 +37,6 @@ except:
     st.rerun()
 
 # --- MAPEAMENTO CASE-INSENSITIVE DAS COLUNAS DA ESCALAÇÃO ---
-# Cria um dicionário que vincula o nome minúsculo da coluna ao nome real dela na planilha
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
 
 c_av1_email = colunas_reais.get('email_avaliador_1')
@@ -144,17 +143,9 @@ st.subheader("Sistema de Gestão de Bancas Acadêmicas" if not eh_orientador els
 st.caption("© 2026 Desenvolvido por Wanessa Sales de Almeida")
 st.divider()
 
-col_user, col_exit = st.columns([3, 1])
-with col_user:
-    st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
-with col_exit:
-    if st.button("Sair"):
-        st.session_state.clear()
-        st.query_params.clear()
-        st.rerun()
-
-# FILTRAGEM DE GRUPOS PENDENTES
+# --- FILTRAGEM DE GRUPOS PENDENTES EM TEMPO REAL ---
 pendentes = pd.DataFrame()
+total_pendencias_contador = 0
 
 if not df_escalacao.empty and c_alunos:
     if eh_orientador:
@@ -167,10 +158,10 @@ if not df_escalacao.empty and c_alunos:
             
             if alunos_restantes:
                 linhas_pendentes.append(row)
+                total_pendencias_contador += len(alunos_restantes) # Conta discentes pendentes
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
     else:
-        # Filtro robusto e direto utilizando as colunas reais mapeadas em minúsculo
         cond_banca = pd.Series(False, index=df_escalacao.index)
         if c_av1_email:
             cond_banca |= (df_escalacao[c_av1_email].astype(str).str.lower() == email_user)
@@ -182,7 +173,37 @@ if not df_escalacao.empty and c_alunos:
         possiveis = df_escalacao[cond_banca].copy()
         items_feitos = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Banca")]["Alunos"].tolist()
         pendentes = possiveis[~possiveis[c_alunos].isin(items_feitos)].copy()
+        total_pendencias_contador = len(pendentes) # Conta bancas/grupos pendentes
 
+# --- AMBIENTE VISUAL DO DOCENTE COM BLOCO DE SAÍDA SEGURO ---
+col_user, col_exit = st.columns([3, 1])
+with col_user:
+    st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
+with col_exit:
+    if st.button("Sair"):
+        if total_pendencias_contador > 0:
+            st.session_state.tentou_sair_com_pendencia = True
+        else:
+            st.session_state.clear()
+            st.query_params.clear()
+            st.rerun()
+
+# --- POPUP / AVISO DE CONFIRMAÇÃO DE SAÍDA ---
+if st.session_state.get("tentou_sair_com_pendencia", False):
+    st.warning(f"⚠️ **Atenção:** Você ainda possui **{total_pendencias_contador}** avaliações pendentes registradas em seu nome!")
+    col_cancela, col_confirma = st.columns(2)
+    with col_cancela:
+        if st.button("🔄 Voltar e Avaliar"):
+            st.session_state.tentou_sair_com_pendencia = False
+            st.rerun()
+    with col_confirma:
+        if st.button("🏃 Sair Mesmo Assim"):
+            st.session_state.clear()
+            st.query_params.clear()
+            st.rerun()
+    st.stop() # Interrompe o app para focar no aviso
+
+# SEGUIMENTO DO FORMULÁRIO SE NÃO TENTOU SAIR
 if pendentes.empty:
     st.balloons()
     st.success("🎉 Todas as suas avaliações pendentes foram concluídas!")
