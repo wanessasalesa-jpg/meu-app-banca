@@ -290,24 +290,27 @@ else:
         alunos_reais_lista = obter_lista_alunos_linha(dados)
         string_grupo_completo = ", ".join(alunos_reais_lista)
         
-        # --- TRAVA DE HORÁRIO RÍGIDA (5 MINUTOS ANTES) ---
+        # --- TRAVA DE HORÁRIO RÍGIDA (APENAS PARA A BANCA - ORIENTADOR LIBERADO ANTES) ---
         banca_liberada = True
         msg_trava = ""
-        try:
-            val_data = str(dados[c_data]).strip() if c_data else ""
-            val_horario = str(dados[c_horario]).strip() if c_horario else ""
-            data_banca = datetime.strptime(val_data, "%d/%m/%Y").date()
-            horario_banca = datetime.strptime(val_horario, "%H:%M").time()
-            dt_banca_completa = fuso_bruta.localize(datetime.combine(data_banca, horario_banca))
-            
-            agora = obter_agora()
-            limite_liberacao = dt_banca_completa - timedelta(minutes=5)
-            
-            if agora < limite_liberacao:
-                banca_liberada = False
-                msg_trava = f"⏳ Esta avaliação só estará disponível a partir das {limite_liberacao.strftime('%H:%M')} do dia {data_banca.strftime('%d/%m/%Y')}."
-        except:
-            pass
+        
+        # A trava de tempo só bloqueia a sessão se o usuário logado NÃO for orientador
+        if not eh_orientador:
+            try:
+                val_data = str(dados[c_data]).strip() if c_data else ""
+                val_horario = str(dados[c_horario]).strip() if c_horario else ""
+                data_banca = datetime.strptime(val_data, "%d/%m/%Y").date()
+                horario_banca = datetime.strptime(val_horario, "%H:%M").time()
+                dt_banca_completa = fuso_bruta.localize(datetime.combine(data_banca, horario_banca))
+                
+                agora = obter_agora()
+                limite_liberacao = dt_banca_completa - timedelta(minutes=5)
+                
+                if agora < limite_liberacao:
+                    banca_liberada = False
+                    msg_trava = f"⏳ Esta avaliação de Banca só estará disponível a partir das {limite_liberacao.strftime('%H:%M')} do dia {data_banca.strftime('%d/%m/%Y')}."
+            except:
+                pass
 
         with st.expander("📖 Informações do Trabalho", expanded=True):
             st.write(f"**Turma:** {turma_bruta}")
