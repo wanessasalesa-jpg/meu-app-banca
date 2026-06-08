@@ -352,7 +352,7 @@ else:
                             except:
                                 st.error("Erro ao salvar. Tente novamente.")
 
-        # --- TELA 1: FORMULÁRIO DE NOTAS INDIVIDUAIS (RETORNADO AO FLUXO CORRETO) ---
+        # --- TELA 1: FORMULÁRIO DE NOTAS INDIVIDUAIS ---
         elif exibir_formulario_notas:
             rubrica = {}
             if eh_orientador:
@@ -408,21 +408,23 @@ else:
                         "Tempo": (1, "Tempo regulamentar.")
                     }
 
-            # CORREÇÃO DEFINITIVA: Os Sliders agora são gerados diretamente dentro do fluxo e aparecem na tela
             if rubrica:
                 v_max = sum(p for p, h in rubrica.values())
                 st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
                 
                 notas = {}
+                # CORREÇÃO CHAVE ÚNICA: Cria chaves puramente numéricas para os sliders nunca mais sumirem
+                cont_index = 0
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
                     valor_padrao = 0.0 if p == 1 else 0
-                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"s_{item}_{aluno_alvo_final}")
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_n_{cont_index}")
+                    cont_index += 1
 
                 total = sum(notas.values())
                 st.markdown(f"## Nota Atribuída: {total} / {v_max}")
 
-                if st.button("🚀 GRAVAR AVALIAÇÃO NO SISTEMA", key=f"btn_save_{aluno_alvo_final}"):
+                if st.button("🚀 GRAVAR AVALIAÇÃO NO SISTEMA", key="btn_gravar_definitivo_hoje"):
                     with st.spinner("Gravando notas..."):
                         try:
                             st.cache_data.clear()
