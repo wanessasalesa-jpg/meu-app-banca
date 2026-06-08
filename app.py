@@ -8,7 +8,7 @@ import pytz
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
 
-# INJEÇÃO DE CSS ORIGINAL: Garante botão azul na tela inicial e oculta logs técnicos estruturais
+# INJEÇÃO DE CSS ORIGINAL: Fixa o design do botão azul clássico e esconde logs técnicos estruturais
 st.markdown("""
     <style>
     header {visibility: hidden !important;}
@@ -46,19 +46,23 @@ def tratar_nome_curto(nome_completo):
         return f"{partes[0]} {partes[1]}"
     return partes[0]
 
-# 3. CONEXÃO ESTÁVEL COM GOOGLE SHEETS (SEM RE-RUN INFINITO)
+# 3. CONEXÃO NATIVA COM GOOGLE SHEETS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Leitura direta padrão do Streamlit
+# Leitura direta sem loops ou geradores aleatórios para evitar bloqueios de API
 df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
 
-# Limpeza segura de linhas fantasmas
-if not df_escalacao.empty:
-    df_escalacao = df_escalacao.dropna(how='all')
-    if 'Turma' in df_escalacao.columns:
-        df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
+if df_escalacao.empty:
+    st.error("Sincronizando com o Banco de Dados... Aguarde um instante.")
+    time.sleep(1)
+    st.rerun()
 
-# --- MAPEAMENTO DAS COLUNAS DA ESCALAÇÃO ---
+# Limpeza segura de linhas vazias
+df_escalacao = df_escalacao.dropna(how='all')
+if 'Turma' in df_escalacao.columns:
+    df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
+
+# --- MAPEAMENTO SEGURO DE COLUNAS ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
 
 c_av1_email = colunas_reais.get('email_avaliador_1')
@@ -163,7 +167,7 @@ def obter_lista_alunos_linha(row):
                 lista.append(nome)
     return lista
 
-# --- FILTRAGEM MATEMÁTICA PURA DE PENDÊNCIAS ---
+# --- FILTRAGEM MATEMÁTICA DE PENDÊNCIAS ---
 pendentes = pd.DataFrame()
 total_pendencias_contador = 0
 
@@ -178,7 +182,7 @@ if not df_escalacao.empty:
                 
             alunos_grupo = obter_lista_alunos_linha(row)
             
-            # Checa estritamente se o e-mail do orientador logado já salvou uma nota para aquele aluno na aba Respostas
+            # Filtro baseado exclusivamente no cruzamento de e-mail e papel na aba Respostas
             df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
             avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
@@ -192,7 +196,7 @@ if not df_escalacao.empty:
         cond_banca = pd.Series(False, index=df_escalacao.index)
         if c_av1_email: cond_banca |= (df_escalacao[c_av1_email].astype(str).str.lower() == email_user)
         if c_av2_email: cond_banca |= (df_escalacao[c_av2_email].astype(str).str.lower() == email_user)
-        if c_sup_email: cond_banca |= (df_escalacao[c_sup_email].astype(str).str.lower() == email_user)
+        if c_sup_email: cond_banca |= (df_escalacao[df_sup_email].astype(str).str.lower() == email_user) if c_sup_email else cond_banca
             
         possiveis = df_escalacao[cond_banca].copy()
         linhas_pendentes = []
@@ -384,20 +388,20 @@ else:
                     }
 
             if rubrica:
-                v_max = sum(p for p, h in rubrica.values())
-                st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
+                st.write(f"### 📝 Critérios")
                 
                 notas = {}
-                # CHAVE DA ESTRUTURA BLINDADA ORIGINAL: Usa chaves estritamente baseadas no rótulo alfanumérico limpo
+                # PADRÃO OURO DE CHAVE: Usa estritamente o e-mail logado combinado com o índice posicional estável da rubrica
+                cont_idx = 0
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
                     valor_padrao = 0.0 if p == 1 else 0
                     
-                    chave_limpa = "".join([c for c in str(item) if c.isalnum()])
-                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_orig_{chave_limpa}")
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_{email_user}_{cont_idx}")
+                    cont_idx += 1
 
                 total = sum(notas.values())
-                st.markdown(f"## Nota Atribuída: {total} / {v_max}")
+                st.markdown(f"## Nota Atribuída: {total}")
 
                 if st.button("🚀 GRAVAR AVALIAÇÃO NO SISTEMA", key="btn_gravar_definitivo_hoje"):
                     with st.spinner("Gravando notas..."):
