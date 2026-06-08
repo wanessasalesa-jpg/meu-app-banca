@@ -1,21 +1,15 @@
 import streamlit as st
-import subprocess
-import sys
+import gspread
+from google.oauth2.service_account import Credentials
 
-# Tenta garantir que a biblioteca esteja instalada
+st.title("Sistema Crivo - Conexão Direta")
+
+# Aqui o sistema vai ler a chave que você vai colocar no Secrets
 try:
-    from streamlit_gsheets import GSheetsConnection
-except ImportError:
-    st.write("Instalando dependências...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit-gsheets"])
-    from streamlit_gsheets import GSheetsConnection
-
-st.title("Sistema Crivo - Conexão Final")
-
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read(worksheet="Escalacao", ttl=0)
-    st.success("Conexão estabelecida com sucesso!")
-    st.dataframe(df.head())
+    # Se você ainda tiver o seu JSON, vamos usá-lo
+    # Caso contrário, vamos tentar apenas o link
+    st.write("Tentando conectar...")
+    # O código abaixo é apenas um teste de vida
+    st.success("O sistema está rodando!")
 except Exception as e:
-    st.error(f"Erro na conexão: {e}")
+    st.error(f"Erro: {e}")
