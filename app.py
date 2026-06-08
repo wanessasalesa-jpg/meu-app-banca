@@ -197,7 +197,6 @@ if not df_escalacao.empty:
             if "MCM V" in turma_check or "MCM 5" in turma_check or "TCC I" in turma_check or "TCC 1" in turma_check:
                 continue
                 
-            # CHECAGEM ROBUSTA: Descobre se a assinatura na planilha de fato existe ignorando lixos eletrônicos de células
             val_assinatura_real = str(row.get(c_assinatura_col)).strip().replace('nan', '') if c_assinatura_col else ""
             
             if val_assinatura_real == "" or val_assinatura_real.lower() == "none":
@@ -225,7 +224,7 @@ if not df_escalacao.empty:
             if ja_avaliou.empty and alunos_grupo:
                 linhas_pendentes.append(row)
                 total_pendencias_contador += 1
-        if linhas_pendentes:
+        if líneas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
 col_user, col_exit = st.columns([3, 1])
@@ -291,7 +290,6 @@ else:
                 else:
                     st.success("Todos os alunos deste grupo já foram avaliados!")
                     try:
-                        # Força salvamento direto na planilha quebrando cache antigo
                         st.cache_data.clear()
                         df_auto = conn.read(worksheet="Escalacao", ttl=0, cache_id=str(random.randint(1,999)))
                         df_auto.loc[linha_index_planilha - 2, c_assinatura_col] = "CONCLUÍDO VIA APP"
@@ -315,7 +313,7 @@ else:
                 assinatura_texto = st.text_input("**Assinatura Digital (Digite seu Nome Completo para assinar):**").strip()
                 
                 if st.form_submit_button("🚀 ENVIAR PARECER E CONCLUIR BANCA"):
-                    if resposta_aptidao == "" or signature_text := assinatura_texto == "":
+                    if resposta_aptidao == "" or assinatura_texto == "":
                         st.error("Preencha todos os campos obrigatórios.")
                     else:
                         with st.spinner("Gravando parecer..."):
@@ -326,7 +324,7 @@ else:
                                 df_atualizar_linha[c_assinatura_col] = df_atualizar_linha[c_assinatura_col].fillna('').astype(str)
                                 
                                 df_atualizar_linha.loc[linha_index_planilha - 2, c_aptidao_col] = str(resposta_aptidao)
-                                df_atualizar_linha.loc[linha_index_planilha - 2, c_assinatura_col] = str(signature_text)
+                                df_atualizar_linha.loc[linha_index_planilha - 2, c_assinatura_col] = str(assinatura_texto)
                                 
                                 conn.update(worksheet="Escalacao", data=df_atualizar_linha)
                                 st.balloons()
@@ -350,7 +348,7 @@ else:
                         "Desenv. - Pontualidade e Compromisso": (5, "Pontualidade mantida."),
                         "Responsabilidade com a Aprendizagem": (5, "Responsabilidade evidente."),
                         "Texto - Justificativa do Estudo": (6, "Clareza na relevância."),
-                        "Texto - Objective Geral e Específicos": (6, "Objetivos bem formulados."),
+                        "Texto - Objetivo Geral e Específicos": (6, "Objetivos bem formulados."),
                         "Texto - Fundamentação Teórica / Referências": (6, "Referencial teórico relevante."),
                         "Texto - Metodologia Proposta": (6, "Método bem descrito."),
                         "Texto - Cronograma de Execução": (3, "Cronograma estruturado."),
@@ -365,7 +363,7 @@ else:
                         "Discente - Pontualidade e Compromisso": (3, "Pontualidade mantida."),
                         "Responsabilidade com a Aprendizagem": (3, "Responsabilidade evidente."),
                         "Artigo - Estruturação e Escrita Científica": (5, "Fluidez e concisão."),
-                        "Artigo - Fundamentação e Atualização Bibliográfica": (4, "Fundamentação crítica."),
+                        "Artigo - Fundamentação e Actualização Bibliográfica": (4, "Fundamentação crítica."),
                         "Artigo - Apresentação e Discussão dos Resultados": (4, "Discussão crítica."),
                         "Artigo - Rigor Metodológico": (4, "Métodos bem descritos."),
                         "Artigo - Conclusão e Relevância Científica": (3, "Conclusão clara.")
@@ -383,7 +381,7 @@ else:
                         "Tema": (3, "Clareza tema."), "Resumo": (1, "Qualidade resumo."), "Introdução": (5, "Contextualização."),
                         "Justificativa": (5, "Relevância."), "Objetivos": (5, "Mensuráveis."), "Metodologia": (10, "Desenho estudo."),
                         "Referências": (1, "Normas."), "Apresentação Oral": (10, "Domínio."), "Coerência": (10, "Lógica interna."),
-                        "Qualidade Visual": (9, "Organização slides."), "Tempo": (1, "Tempo regulamentar.")
+                        "Qualidade Visual": (9, "Slides."), "Tempo": (1, "Tempo regulamentar.")
                     }
                 elif "TCC II" in turma_bruta or "TCC 2" in turma_bruta or "MCM V" in turma_bruta or "MCM 5" in turma_bruta:
                     rubrica = {
