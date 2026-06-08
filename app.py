@@ -34,6 +34,9 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# FORCE CLEAR CACHE: Garante que o app esqueça qualquer dado antigo deletado na planilha
+st.cache_data.clear()
+
 # 2. FUSO HORÁRIO DE BRASÍLIA
 fuso_bruta = pytz.timezone('America/Sao_Paulo')
 
@@ -150,7 +153,6 @@ elif verificar_presenca_email(email_user, c_sup_email):
 nome_exibicao = tratar_nome_curto(nome_completo_docente)
 cor_primaria = "#002147" if not eh_orientador else "#FF1493"
 
-# Atualização de cor do cabeçalho dinâmico baseado no papel
 st.markdown(f"""
     <style>
     .bloco-cabecalho {{
@@ -195,7 +197,7 @@ if not df_escalacao.empty:
                 continue
                 
             val_assinatura_real = str(row.get(c_assinatura_col)).strip() if c_assinatura_col else ""
-            banca_concluida = val_assinatura_real != "" and val_assinatura_real.lower() != "nan" and val_assinatura_real != "None"
+            banca_concluida = val_assinatura_real != "" and val_assinatura_real.lower() != "nan" and val_assinatura_real != "none"
             
             if not banca_concluida:
                 alunos_grupo = obter_lista_alunos_linha(row)
@@ -403,6 +405,8 @@ else:
                 if st.button("🚀 GRAVAR AVALIAÇÃO NO SISTEMA", key=f"btn_save_{aluno_alvo_final}"):
                     with st.spinner("Gravando notas..."):
                         try:
+                            # Força a limpeza antes de gravar para garantir sincronia absoluta
+                            st.cache_data.clear()
                             df_at = conn.read(worksheet="Respostas", ttl=0)
                             if df_at.empty or not all(col in df_at.columns for col in colunas_respostas_obrigatorias):
                                 df_at = pd.DataFrame(columns=colunas_respostas_obrigatorias)
