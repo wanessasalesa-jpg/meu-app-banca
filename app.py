@@ -5,8 +5,23 @@ from datetime import datetime, timedelta
 import time
 import pytz 
 
-# 1. CONFIGURAÇÃO DA PÁGINA
+# 1. CONFIGURAÇÃO DA PÁGINA (Ajustes visuais prioritários para evitar flickering)
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
+
+# INJEÇÃO IMEDIATA DE CSS: Primeira ação do script para blindar a tela antes de qualquer processamento
+st.markdown("""
+    <style>
+    header {visibility: hidden !important;}
+    #MainMenu {visibility: hidden !important;}
+    footer {visibility: hidden;}
+    
+    /* Oculta absolutamente qualquer dump de código, blocos de erro ou tracebacks nativos */
+    .stException, .stDetails, div[data-testid="stNotification"] code, pre, code {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 # 2. FUSO HORÁRIO DE BRASÍLIA
 fuso_bruta = pytz.timezone('America/Sao_Paulo')
@@ -27,18 +42,26 @@ def tratar_nome_curto(nome_completo):
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data(aba, ttl_sec=0):
-    return conn.read(worksheet=aba, ttl=ttl_sec)
+    try:
+        return conn.read(worksheet=aba, ttl=ttl_sec)
+    except:
+        return pd.DataFrame()
+
+# Container seguro para isolar mensagens de carregamento de banco de dados
+msg_container = st.empty()
 
 try:
-    df_escalacao = get_data("Escalacao", ttl_sec=0)
+    df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
     if 'Aptidão Defesa' in df_escalacao.columns:
-        df_escalacao['Aptidão Defesa'] = df_escalacao['Aptidão Defesa'].astype(str).replace('nan', '')
+        df_escalacao['Aptidão Defesa'] = df_escalacao['Aptidão Defesa'].astype(str).replace('nan', '').str.strip()
     if 'Assinatura Orientador' in df_escalacao.columns:
-        df_escalacao['Assinatura Orientador'] = df_escalacao['Assinatura Orientador'].astype(str).replace('nan', '')
+        df_escalacao['Assinatura Orientador'] = df_escalacao['Assinatura Orientador'].astype(str).replace('nan', '').str.strip()
 except:
-    st.error("Conectando ao banco de dados... Aguarde.")
+    msg_container.error("Carregando ambiente seguro... Por favor, aguarde um instante.")
     time.sleep(1)
     st.rerun()
+
+msg_container.empty() # Limpa o container de carregamento de forma invisível
 
 # --- MAPEAMENTO CASE-INSENSITIVE DAS COLUNAS DA ESCALAÇÃO ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
@@ -68,7 +91,7 @@ c_aluno5 = colunas_reais.get('aluno_5')
 
 # FUNÇÃO AUXILIAR PARA CHECAR SE O EMAIL EXISTE NA COLUNA MAPEADA
 def verificar_presenca_email(email, coluna_real):
-    if not coluna_real:
+    if not coluna_real or df_escalacao.empty:
         return False
     return email in df_escalacao[coluna_real].astype(str).str.strip().str.lower().unique()
 
@@ -89,9 +112,6 @@ if 'email' not in st.session_state:
 if 'email' not in st.session_state:
     st.markdown("""
         <style>
-        header {visibility: hidden !important;}
-        #MainMenu {visibility: hidden !important;}
-        footer {visibility: hidden;}
         .stButton button {
             width: 100% !important;
             border-radius: 10px !important;
@@ -149,16 +169,12 @@ elif verificar_presenca_email(email_user, c_sup_email):
 
 nome_exibicao = tratar_nome_curto(nome_completo_docente)
 
-# --- DEFINIÇÃO DINÂMICA DE CORES ---
+# --- DEFINIÇÃO DINÂMICA DE CORES ENVOLVENTES ---
 cor_primaria = "#002147" if not eh_orientador else "#FF1493"
 cor_texto_bloco = "#ffffff"
 
 st.markdown(f"""
     <style>
-    header {{visibility: hidden !important;}}
-    #MainMenu {{visibility: hidden !important;}}
-    footer {{visibility: hidden;}}
-    
     .bloco-cabecalho {{
         background-color: {cor_primaria} !important;
         padding: 25px !important;
@@ -218,21 +234,18 @@ if not df_escalacao.empty:
             if "MCM V" in turma_check or "MCM 5" in turma_check or "TCC I" in turma_check or "TCC 1" in turma_check:
                 continue
                 
-            alunos_grupo = obter_lista_alunos_linha(row)
+            val_assinatura_real = str(row.get(c_assinatura_col, '')).strip()
+            banca_concluida_na_planilha = val_assinatura_real != "" and val_assinatura_real.lower() != "nan"
             
-            # BLINDAGEM FORÇADA: O filtro agora busca correspondência EXATA de e-mail e papel para não herdar strings da banca!
-            df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
-            avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
-            
-            alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
-            
-            val_apt = row.get(c_aptidao_col)
-            ja_preencheu_aptidao = pd.notna(val_apt) and str(val_apt).strip() != "" and str(val_apt).strip().lower() != "nan"
-            precisa_tela_aptidao = ("TCC II" in turma_check or "TCC 2" in turma_check) and not ja_preencheu_aptidao
-            
-            if list(alunos_restantes) or precisa_tela_aptidao:
+            if not banca_concluida_na_planilha:
                 linhas_pendentes.append(row)
-                total_pendencias_contador += len(alunos_restantes) + (1 if precisa_tela_aptidao and not alunos_restantes else 0)
+                alunos_grupo = obter_lista_alunos_linha(row)
+                
+                df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
+                avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
+                alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
+                
+                total_pendencias_contador += len(alunos_restantes) if alunos_restantes else 1
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
     else:
@@ -365,8 +378,15 @@ else:
                         exibir_tela_aptidao_final = True
                     else:
                         st.success("Todos os alunos deste grupo já foram avaliados por si!")
-                        if "grupo_selecionado" in st.session_state:
+                        try:
+                            df_auto = conn.read(worksheet="Escalacao", ttl=0)
+                            df_auto.loc[linha_index_planilha - 2, c_assinatura_col] = "CONCLUÍDO VIA APP"
+                            conn.update(worksheet="Escalacao", data=df_auto)
                             st.session_state["grupo_selecionado"] = ""
+                            time.sleep(0.5)
+                            st.rerun()
+                        except:
+                            pass
 
             # --- TELA 2: FICHA DE APTIDÃO (EXCLUSIVO TCC II) ---
             if eh_orientador and exibir_tela_aptidao_final:
@@ -408,7 +428,7 @@ else:
                                     time.sleep(0.5)
                                     st.rerun()
                                 except Exception as e:
-                                    st.error(f"Erro ao salvar: {e}")
+                                    st.error("Erro ao processar o salvamento. Tente novamente em alguns segundos.")
 
             # --- TELA 1: FORMULÁRIO DE NOTAS INDIVIDUAIS ---
             elif exibir_formulario_notas:
