@@ -4,7 +4,7 @@ import gspread
 st.title("Sistema Crivo")
 
 try:
-    # Lê as chaves individuais configuradas no Secrets
+    # Acessa cada chave individualmente
     creds = {
         "type": st.secrets["type"],
         "project_id": st.secrets["project_id"],
@@ -19,10 +19,11 @@ try:
     }
     
     gc = gspread.service_account_from_dict(creds)
-    # Coloque a URL da planilha aqui:
-    sh = gc.open_by_url("SUA_URL_DA_PLANILHA_AQUI")
+    # A URL completa da sua planilha (coloque aqui)
+    sh = gc.open_by_url("COLE_AQUI_A_URL_DA_PLANILHA")
+    worksheet = sh.worksheet("Escalacao")
     
     st.success("Conexão estabelecida!")
-    st.write("Planilha conectada.")
+    st.write(worksheet.get_all_values())
 except Exception as e:
     st.error(f"Erro na conexão: {e}")
