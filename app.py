@@ -52,7 +52,7 @@ c_titulo = colunas_reais.get('titulo')
 c_data = colunas_reais.get('data')
 c_horario = colunas_reais.get('horario')
 
-# MAPEAMENTO DAS NOVAS COLUNAS SEPARADAS DE ALUNOS
+# MAPEAMENTO DAS COLUNAS SEPARADAS DE ALUNOS
 c_aluno1 = colunas_reais.get('aluno_1')
 c_aluno2 = colunas_reais.get('aluno_2')
 c_aluno3 = colunas_reais.get('aluno_3')
@@ -80,12 +80,30 @@ if 'email' not in st.session_state:
         st.session_state.email = st.query_params["user"]
 
 if 'email' not in st.session_state:
+    # Força a estilização do botão azul clássico no ecrã de login antes de identificar o papel
+    st.markdown("""
+        <style>
+        header {visibility: hidden !important;}
+        #MainMenu {visibility: hidden !important;}
+        footer {visibility: hidden;}
+        .stButton button {
+            width: 100% !important;
+            border-radius: 10px !important;
+            height: 3.5em !important;
+            background-color: #002147 !important;
+            color: white !important;
+            font-weight: bold !important;
+            border: none !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
     st.title("🎓 CRIVO")
     st.subheader("Sistema de Gestão de Bancas Acadêmicas")
     st.caption("© 2026 Desenvolvido por Wanessa Sales de Almeida")
     st.divider()
 
-    st.write("### Identification do Docente")
+    st.write("### Identificação do Docente")
     email_raw = st.text_input("Digite seu e-mail cadastrado:").strip()
     if st.button("Acessar Sistema"):
         if email_raw:
@@ -126,6 +144,7 @@ elif verificar_presenca_email(email_user, c_sup_email):
 nome_exibicao = tratar_nome_curto(nome_completo_docente)
 
 # --- DEFINIÇÃO DINÂMICA DE CORES (CSS TOTALMENTE REESTRUTURADO) ---
+# Azul-escuro institucional para banca, Pink marcante para orientação
 cor_primaria = "#002147" if not eh_orientador else "#FF1493"
 cor_texto_bloco = "#ffffff"
 
@@ -135,6 +154,7 @@ st.markdown(f"""
     #MainMenu {{visibility: hidden !important;}}
     footer {{visibility: hidden;}}
     
+    /* Injeção do bloco de cabeçalho com a cor dinâmica do papel */
     .bloco-cabecalho {{
         background-color: {cor_primaria} !important;
         padding: 25px !important;
@@ -149,6 +169,7 @@ st.markdown(f"""
         padding: 2px 0 !important;
     }}
     
+    /* Estilização forçada dos botões de gravação e ações */
     .stButton button {{
         width: 100% !important;
         border-radius: 10px !important;
@@ -161,6 +182,7 @@ st.markdown(f"""
     </style>
     """, unsafe_allow_html=True)
 
+# CABEÇALHO EM BLOCO IMPACTANTE COM AS CORES DO PAPEL
 sub_titulo_texto = "Sistema de Gestão de Bancas Acadêmicas" if not eh_orientador else "Sistema de Gestão de Orientações"
 st.markdown(f"""
     <div class="bloco-cabecalho">
@@ -170,7 +192,7 @@ st.markdown(f"""
     </div>
     """, unsafe_allow_html=True)
 
-# FUNÇÃO AUXILIAR PARA PEGAR LISTA DE ALUNOS DE UMA LINHA DA ESCALAÇÃO
+# FUNÇÃO AUXILIAR PARA MONTAR A LISTA DE ALUNOS REAL DE UMA LINHA DA ESCALAÇÃO
 def obter_lista_alunos_linha(row):
     lista = []
     for col_aluno in [c_aluno1, c_aluno2, c_aluno3, c_aluno4, c_aluno5]:
@@ -213,14 +235,14 @@ if not df_escalacao.empty:
             alunos_grupo = obter_lista_alunos_linha(row)
             string_grupo_banca = ", ".join(alunos_grupo)
             
-            já_avaliou = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Banca") & (df_respostas["Alunos"] == string_grupo_banca)]
-            if já_avaliou.empty and alunos_grupo:
+            ja_avaliou = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Banca") & (df_respostas["Alunos"] == string_grupo_banca)]
+            if ja_avaliou.empty and alunos_grupo:
                 linhas_pendentes.append(row)
                 total_pendencias_contador += 1
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
-# --- AMBIENTE VISUAL DO DOCENTE ---
+# --- AMBIENTE VISUAL DO DOCENTE COM BLOCO DE SAÍDA SEGURO ---
 col_user, col_exit = st.columns([3, 1])
 with col_user:
     st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
@@ -233,8 +255,9 @@ with col_exit:
             st.query_params.clear()
             st.rerun()
 
+# --- AVISO DE CONFIRMAÇÃO DE SAÍDA (TRAVA SEGURO) ---
 if st.session_state.get("tentou_sair_com_pendencia", False):
-    st.warning(f"⚠️ **Atenção:** Você ainda possui **{total_pendencias_contador}** avaliações pendentes registradas em seu nome!")
+    st.warning(f"⚠️ **Atenção:** Ainda possui **{total_pendencias_contador}** avaliações pendentes registadas no seu nome!")
     col_cancela, col_confirma = st.columns(2)
     with col_cancela:
         if st.button("🔄 Voltar e Avaliar"):
@@ -251,7 +274,7 @@ if pendentes.empty:
     st.balloons()
     st.success("🎉 Todas as suas avaliações pendentes foram concluídas!")
 else:
-    # Cria a string visual do grupo para o Selectbox
+    # Cria a string curta e visual do grupo para o Selectbox
     def gerar_display_grupo(row):
         alunos = obter_lista_alunos_linha(row)
         return ", ".join([tratar_nome_curto(n) for n in alunos])
@@ -311,7 +334,7 @@ else:
                         aluno_alvo_final = st.selectbox("👤 Selecione o Aluno para atribuir a nota individual:", lista_alunos_individuais)
                     else:
                         exibir_formulario = False
-                        st.success("Todos os alunos deste grupo já foram avaliados por você!")
+                        st.success("Todos os alunos deste grupo já foram avaliados por si!")
 
             if exibir_formulario:
                 @st.fragment
@@ -425,7 +448,7 @@ else:
                         if tem_zero and not conf_zero:
                             st.warning("Confirme as notas zero antes de gravar.")
                         else:
-                            with st.spinner("Gravando notas e sincronizando base de dados..."):
+                            with st.spinner("A gravar notas e a sincronizar base de dados..."):
                                 try:
                                     st.cache_data.clear()
                                     df_at = conn.read(worksheet="Respostas", ttl=0)
