@@ -8,16 +8,28 @@ import pytz
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
 
-# INJEÇÃO IMEDIATA DE CSS PARA EVITAR VISUALIZAÇÃO DE CÓDIGOS EM PROCESSAMENTO
+# INJEÇÃO IMEDIATA DE CSS: Corrige o botão azul na tela inicial e oculta códigos em processamento
 st.markdown("""
     <style>
     header {visibility: hidden !important;}
     #MainMenu {visibility: hidden !important;}
     footer {visibility: hidden;}
     
+    /* Oculta dumps de códigos e mensagens nativas estruturais */
     .stException, .stDetails, div[data-testid="stNotification"] code, pre, code {
         display: none !important;
         visibility: hidden !important;
+    }
+    
+    /* Força o design profissional do botão azul clássico institucional */
+    .stButton button {
+        width: 100% !important;
+        border-radius: 10px !important;
+        height: 3.5em !important;
+        background-color: #002147 !important;
+        color: white !important;
+        font-weight: bold !important;
+        border: none !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -52,7 +64,12 @@ if df_escalacao.empty:
     time.sleep(1)
     st.rerun()
 
-# Limpeza e padronização forçada das colunas de fechamento
+# --- LIMPEZA DE LINHAS FANTASMAS (ELIMINA O ERRO DE TELA CONCLUÍDA PREMATURA) ---
+df_escalacao = df_escalacao.dropna(how='all')
+if 'Turma' in df_escalacao.columns:
+    df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
+
+# Padronização e higienização das colunas novas de controle
 if 'Aptidão Defesa' in df_escalacao.columns:
     df_escalacao['Aptidão Defesa'] = df_escalacao['Aptidão Defesa'].fillna('').astype(str).str.strip()
 if 'Assinatura Orientador' in df_escalacao.columns:
@@ -133,6 +150,7 @@ elif verificar_presenca_email(email_user, c_sup_email):
 nome_exibicao = tratar_nome_curto(nome_completo_docente)
 cor_primaria = "#002147" if not eh_orientador else "#FF1493"
 
+# Atualização de cor do cabeçalho dinâmico baseado no papel
 st.markdown(f"""
     <style>
     .bloco-cabecalho {{
@@ -141,14 +159,6 @@ st.markdown(f"""
         border-radius: 12px !important;
         color: white !important;
         margin-bottom: 25px !important;
-    }}
-    .stButton button {{
-        width: 100% !important;
-        border-radius: 10px !important;
-        height: 3.5em !important;
-        background-color: {cor_primaria} !important;
-        color: white !important;
-        font-weight: bold !important;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -184,7 +194,6 @@ if not df_escalacao.empty:
             if "MCM V" in turma_check or "MCM 5" in turma_check or "TCC I" in turma_check or "TCC 1" in turma_check:
                 continue
                 
-            # REGRA ROBUSTA DE ASSINATURA BRANCA/VAZIA
             val_assinatura_real = str(row.get(c_assinatura_col)).strip() if c_assinatura_col else ""
             banca_concluida = val_assinatura_real != "" and val_assinatura_real.lower() != "nan" and val_assinatura_real != "None"
             
