@@ -5,20 +5,15 @@ from datetime import datetime
 import time
 import pytz 
 
-# 1. CONFIGURAÇÃO DA PÁGINA
+# 1. CONFIGURAÇÃO DA PÁGINA ACTIVE
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
 
-# INJEÇÃO DE CSS ORIGINAL: Fixa o design do botão azul institucional e esconde logs técnicos estruturais
+# INJEÇÃO DE CSS INSTITUCIONAL: Fixa o design do botão azul clássico e limpa elementos nativos do Streamlit
 st.markdown("""
     <style>
     header {visibility: hidden !important;}
     #MainMenu {visibility: hidden !important;}
     footer {visibility: hidden;}
-    
-    .stException, .stDetails, div[data-testid="stNotification"] code, pre, code {
-        display: none !important;
-        visibility: hidden !important;
-    }
     
     .stButton button {
         width: 100% !important;
@@ -46,23 +41,18 @@ def tratar_nome_curto(nome_completo):
         return f"{partes[0]} {partes[1]}"
     return partes[0]
 
-# 3. CONEXÃO NATIVA COM GOOGLE SHEETS
+# 3. CONEXÃO DIRETA COM O BANCO DE DADOS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Leitura direta estável das abas do Google Sheets
+# Leitura crua e direta: Se houver erro na planilha, o Streamlit vai mostrar exatamente qual é o problema
 df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
 
-if df_escalacao.empty:
-    st.warning("Carregando base de dados acadêmica... Aguarde um instante.")
-    time.sleep(1)
-    st.rerun()
-
-# Higienização segura de linhas vazias e registros fantasmas
+# Limpeza básica de linhas totalmente vazias
 df_escalacao = df_escalacao.dropna(how='all')
 if 'Turma' in df_escalacao.columns:
     df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
 
-# --- MAPEAMENTO SEGURO DE COLUNAS ---
+# --- MAPEAMENTO DAS COLUNASAtivas ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
 
 c_av1_email = colunas_reais.get('email_avaliador_1')
@@ -94,7 +84,7 @@ colunas_respostas_obrigatorias = ["Avaliador", "Email_Avaliador", "Alunos", "Not
 if df_respostas.empty or not all(col in df_respostas.columns for col in colunas_respostas_obrigatorias):
     df_respostas = pd.DataFrame(columns=colunas_respostas_obrigatorias)
 
-# --- SISTEMA DE ACESSO INSTITUCIONAL ---
+# --- SISTEMA DE ACESSO ---
 if 'email' not in st.session_state:
     if "user" in st.query_params:
         st.session_state.email = st.query_params["user"]
@@ -164,7 +154,7 @@ def obter_lista_alunos_linha(row):
                 lista.append(nome)
     return lista
 
-# --- DETERMINAÇÃO MATEMÁTICA ORIGINAL DE PENDÊNCIAS ---
+# --- PROCESSAMENTO SEGURO DE PENDÊNCIAS POR HISTÓRICO ---
 pendentes = pd.DataFrame()
 total_pendencias_contador = 0
 
@@ -179,7 +169,7 @@ if not df_escalacao.empty:
                 
             alunos_grupo = obter_lista_alunos_linha(row)
             
-            # Cruza e-mail e papel na aba Respostas para listar pendências de alunos em tempo real
+            # Conta as notas já salvas cruzando o e-mail do orientador logado na aba Respostas
             df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
             avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
@@ -207,7 +197,7 @@ if not df_escalacao.empty:
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
-# --- BOTÃO DE SAÍDA E TRAVA PREVENTIVA ---
+# --- TRAVA DE SEGURANÇA CONTRA SAÍDA PREVENTIVA ---
 col_user, col_exit = st.columns([3, 1])
 with col_user:
     st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
@@ -345,14 +335,14 @@ else:
                 st.write(f"### 📝 Critérios")
                 
                 notas = {}
-                # CHAVE ORIGINAL HIGIENIZADA COMPATÍVEL ESTÁTICA
-                cont_idx = 0
+                # CHAVE ORIGINAL HIGIENIZADA COMPATÍVEL ESTÁTICA: Vincula o critério limpo ao nome curto do aluno
+                aluno_chave = str(aluno_alvo_final).replace(" ", "").replace(",", "")
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
                     valor_padrao = 0.0 if p == 1 else 0
                     
-                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_orig_{email_user}_{cont_idx}")
-                    cont_idx += 1
+                    item_chave = str(item).replace(" ", "").replace("-", "").replace("/", "")
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_orig_{item_chave}_{aluno_chave}")
 
                 total = sum(notas.values())
                 st.markdown(f"## Nota Atribuída: {total}")
