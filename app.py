@@ -31,6 +31,11 @@ def get_data(aba, ttl_sec=2):
 
 try:
     df_escalacao = get_data("Escalacao", ttl_sec=300)
+    # BLINDAGEM FORÇADA: Garante que as novas colunas sejam interpretadas como Texto (evita o erro do float64)
+    if 'Aptidão Defesa' in df_escalacao.columns:
+        df_escalacao['Aptidão Defesa'] = df_escalacao['Aptidão Defesa'].astype(str).replace('nan', '')
+    if 'Assinatura Orientador' in df_escalacao.columns:
+        df_escalacao['Assinatura Orientador'] = df_escalacao['Assinatura Orientador'].astype(str).replace('nan', '')
 except:
     st.error("Conectando ao banco de dados... Aguarde.")
     time.sleep(1)
@@ -52,7 +57,6 @@ c_titulo = colunas_reais.get('titulo')
 c_data = colunas_reais.get('data')
 c_horario = colunas_reais.get('horario')
 
-# COLUNAS REAIS DA PLANILHA PARA SALVAR O FECHAMENTO DE APTIDÃO (IMAGEM 07643f.png)
 c_aptidao_col = colunas_reais.get('aptidão defesa')
 c_assinatura_col = colunas_reais.get('assinatura orientador')
 
@@ -182,7 +186,6 @@ st.markdown(f"""
     </style>
     """, unsafe_allow_html=True)
 
-# CABEÇALHO EM BLOCO IMPACTANTE COM AS CORES DO PAPEL
 sub_titulo_texto = "Sistema de Gestão de Bancas Acadêmicas" if not eh_orientador else "Sistema de Gestão de Orientações"
 st.markdown(f"""
     <div class="bloco-cabecalho">
@@ -214,19 +217,18 @@ if not df_escalacao.empty:
             alunos_grupo = obter_lista_alunos_linha(row)
             turma_check = str(row[c_turma]).strip().upper() if c_turma else ""
             
-            # Checa se o orientador já lançou as notas de cada aluno individualmente
             avaliados = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Orientador")]["Alunos"].tolist()
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
             
-            # LÓGICA DE ETAPA: Se for TCC II e já avaliou todos os alunos, mas NÃO preencheu a aptidão na planilha ainda, continua pendente para a tela seguinte!
-            ja_preencheu_aptidao = pd.notna(row.get(c_aptidao_col)) and str(row.get(c_aptidao_col)).strip() != "" if c_aptidao_col else False
+            val_apt = row.get(c_aptidao_col)
+            ja_preencheu_aptidao = pd.notna(val_apt) and str(val_apt).strip() != "" and str(val_apt).strip().lower() != "nan"
             precisa_tela_aptidao = ("TCC II" in turma_check or "TCC 2" in turma_check) and not ja_preencheu_aptidao
             
             if alunos_restantes or precisa_tela_aptidao:
                 linhas_pendentes.append(row)
                 total_pendencias_contador += len(alunos_restantes) + (1 if precisa_tela_aptidao and not alunos_restantes else 0)
-        if lines_pendentes := linhas_pendentes:
-            pendentes = pd.DataFrame(lines_pendentes)
+        if linhas_pendentes:
+            pendentes = pd.DataFrame(linhas_pendentes)
     else:
         cond_banca = pd.Series(False, index=df_escalacao.index)
         if c_av1_email:
@@ -249,7 +251,7 @@ if not df_escalacao.empty:
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
-# --- AMBIENTE VISUAL DO DOCENTE COM BLOCO DE SAÍDA SEGURO ---
+# --- AMBIENTE VISUAL DO DOCENTE ---
 col_user, col_exit = st.columns([3, 1])
 with col_user:
     st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
@@ -262,7 +264,6 @@ with col_exit:
             st.query_params.clear()
             st.rerun()
 
-# --- AVISO DE CONFIRMAÇÃO DE SAÍDA ---
 if st.session_state.get("tentou_sair_com_pendencia", False):
     st.warning(f"⚠️ **Atenção:** Ainda possui **{total_pendencias_contador}** avaliações pendentes registadas no seu nome!")
     col_cancela, col_confirma = st.columns(2)
@@ -280,6 +281,8 @@ if st.session_state.get("tentou_sair_com_pendencia", False):
 if pendentes.empty:
     st.balloons()
     st.success("🎉 Todas as suas avaliações pendentes foram concluídas!")
+    if "grupo_selecionado" in st.session_state:
+        del st.session_state["grupo_selecionado"]
 else:
     def gerar_display_grupo(row):
         alunos = obter_lista_alunos_linha(row)
@@ -288,7 +291,20 @@ else:
     pendentes['Display_Grupo'] = pendentes.apply(gerar_display_grupo, axis=1)
     lista_grupos_display = pendentes["Display_Grupo"].tolist()
     
-    selecionado_display = st.selectbox("🎯 Escolha o Grupo para Avaliar:", [""] + lista_grupos_display)
+    # MEMÓRIA DE SELEÇÃO: Mantém o grupo travado na tela após cada salvamento individual
+    if "grupo_selecionado" not in st.session_state or st.session_state["grupo_selecionado"] not in lista_grupos_display:
+        st.session_state["grupo_selecionado"] = ""
+
+    idx_selecao = 0
+    if st.session_state["grupo_selecionado"] in lista_grupos_display:
+        idx_selecao = lista_grupos_display.index(st.session_state["grupo_selecionado"]) + 1
+
+    selecionado_display = st.selectbox(
+        "🎯 Escolha o Grupo para Avaliar:", 
+        [""] + lista_grupos_display, 
+        index=idx_selecao
+    )
+    st.session_state["grupo_selecionado"] = selecionado_display
 
     if selecionado_display and selecionado_display != "":
         dados = pendentes[pendentes["Display_Grupo"] == selecionado_display].iloc[0]
@@ -296,9 +312,7 @@ else:
         alunos_reais_lista = obter_lista_alunos_linha(dados)
         string_grupo_completo = ", ".join(alunos_reais_lista)
         
-        # Identifica o índice da linha na planilha real para atualizações diretas
         linha_index_planilha = dados.name + 2 
-        
         banca_liberada = True
         msg_trava = ""
         
@@ -338,23 +352,22 @@ else:
                     exibir_formulario_notas = False
                     st.warning("⚠️ Nota do orientador não aplicável para esta turma. A turma MCM V possui 100% da nota final atribuída exclusivamente pela banca examinadora.")
                 else:
-                    # Filtra quais alunos deste grupo já ganharam nota do Orientador
                     avaliados_na_aba = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Orientador")]["Alunos"].tolist()
                     lista_alunos_individuais = [a for a in alunos_reais_lista if a not in avaliados_na_aba]
                     
                     if lista_alunos_individuais:
+                        # MUDANÇA: O selectbox mostra apenas os alunos que FALTAM ser avaliados, e eles vão sumindo automaticamente!
                         aluno_alvo_final = st.selectbox("👤 Selecione o Aluno para atribuir a nota individual:", lista_alunos_individuais)
                     else:
                         exibir_formulario_notas = False
-                        # SEGUNDA TELA ATIVADA: Se for TCC II e as notas individuais acabaram, abre o fechamento!
                         if "TCC II" in turma_bruta or "TCC 2" in turma_bruta:
                             exibir_tela_aptidao_final = True
                         else:
                             st.success("Todos os alunos deste grupo já foram avaliados por si!")
+                            if "grupo_selecionado" in st.session_state:
+                                st.session_state["grupo_selecionado"] = ""
 
-            # -----------------------------------------------------------------
-            # TELA SEGUINTE DE FECHAMENTO: SÓ VAI APARECER PARA TCC II APÓS AS NOTAS INDIVIDUAIS
-            # -----------------------------------------------------------------
+            # --- TELA 2: FICHA DE APTIDÃO (SEM ENGASGOS) ---
             if eh_orientador and exibir_tela_aptidao_final:
                 st.markdown("---")
                 st.subheader("📋 TELA 2: Ficha de Aptidão de Defesa (Exclusivo TCC II)")
@@ -364,14 +377,10 @@ else:
                     resposta_aptidao = st.radio(
                         "**O projeto de Trabalho de Conclusão de Curso (TCC II) entregue pelo grupo encontra-se:**",
                         ["", "APTO para apresentação", "INAPTO para apresentação"],
-                        index=0,
-                        help="Marque a condição de aceitabilidade do trabalho para a defesa."
+                        index=0
                     )
                     
-                    assinatura_texto = st.text_input(
-                        "**Assinatura Digital (Digite seu Nome Completo para assinar):**",
-                        value=""
-                    ).strip()
+                    assinatura_texto = st.text_input("**Assinatura Digital (Digite seu Nome Completo para assinar):**").strip()
                     
                     if st.form_submit_button("🚀 ENVIAR PARECER E CONCLUIR BANCA"):
                         if resposta_aptidao == "":
@@ -384,20 +393,25 @@ else:
                                     st.cache_data.clear()
                                     df_atualizar_linha = conn.read(worksheet="Escalacao", ttl=0)
                                     
-                                    # Grava direto nas colunas R e S que você criou na planilha (Imagem 07643f.png)
-                                    df_atualizar_linha.loc[linha_index_planilha - 2, c_aptidao_col] = resposta_aptidao
-                                    df_atualizar_linha.loc[linha_index_planilha - 2, c_assinatura_col] = assinatura_texto
+                                    # FORÇADO TEXTO: Converte a coluna inteira para formato string antes de injetar
+                                    df_atualizar_linha[c_aptidao_col] = df_atualizar_linha[c_aptidao_col].astype(str).replace('nan', '')
+                                    df_atualizar_linha[c_assinatura_col] = df_atualizar_linha[c_assinatura_col].astype(str).replace('nan', '')
+                                    
+                                    df_atualizar_linha.loc[linha_index_planilha - 2, c_aptidao_col] = str(resposta_aptidao)
+                                    df_atualizar_linha.loc[linha_index_planilha - 2, c_assinatura_col] = str(assinatura_texto)
                                     
                                     conn.update(worksheet="Escalacao", data=df_atualizar_linha)
                                     
                                     st.balloons()
-                                    st.success("🎉 Ficha de Aptidão registrada e assinada com sucesso! Lote concluído.")
+                                    st.success("🎉 Ficha de Aptidão registrada com sucesso! Lote concluído.")
+                                    # Limpa a seleção para o orientador seguir para o próximo grupo limpo
+                                    st.session_state["grupo_selecionado"] = ""
                                     time.sleep(1.5)
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Erro ao salvar: {e}")
 
-            # --- FORMULÁRIO DE AVALIAÇÃO DE NOTAS (TELA 1) ---
+            # --- TELA 1: FORMULÁRIO DE NOTAS INDIVIDUAIS ---
             elif exibir_formulario_notas:
                 @st.fragment
                 def formulario_avaliacao(aluno_para_salvar):
@@ -525,9 +539,8 @@ else:
                                     df_f = pd.concat([df_at, nova_l], ignore_index=True)
                                     conn.update(worksheet="Respostas", data=df_f)
                                     
-                                    st.balloons()
                                     st.success("✅ Avaliação gravada com sucesso!")
-                                    time.sleep(1.5)
+                                    time.sleep(1)
                                     st.rerun()
                                 except:
                                     time.sleep(1)
