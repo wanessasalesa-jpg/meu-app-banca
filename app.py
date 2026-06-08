@@ -8,7 +8,7 @@ import pytz
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
 
-# INJEÇÃO DE CSS ORIGINAL: Fixa o design do botão azul clássico e esconde logs técnicos estruturais
+# INJEÇÃO DE CSS ORIGINAL: Fixa o design do botão azul institucional e esconde logs técnicos estruturais
 st.markdown("""
     <style>
     header {visibility: hidden !important;}
@@ -49,15 +49,15 @@ def tratar_nome_curto(nome_completo):
 # 3. CONEXÃO NATIVA COM GOOGLE SHEETS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Leitura direta padrão do Streamlit (sem truques de IDs aleatórios)
+# Leitura direta estável das abas do Google Sheets
 df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
 
 if df_escalacao.empty:
-    st.error("Sincronizando com o Banco de Dados... Aguarde um instante.")
+    st.warning("Carregando base de dados acadêmica... Aguarde um instante.")
     time.sleep(1)
     st.rerun()
 
-# Limpeza de linhas vazias
+# Higienização segura de linhas vazias e registros fantasmas
 df_escalacao = df_escalacao.dropna(how='all')
 if 'Turma' in df_escalacao.columns:
     df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
@@ -94,7 +94,7 @@ colunas_respostas_obrigatorias = ["Avaliador", "Email_Avaliador", "Alunos", "Not
 if df_respostas.empty or not all(col in df_respostas.columns for col in colunas_respostas_obrigatorias):
     df_respostas = pd.DataFrame(columns=colunas_respostas_obrigatorias)
 
-# --- SISTEMA DE ACESSO ---
+# --- SISTEMA DE ACESSO INSTITUCIONAL ---
 if 'email' not in st.session_state:
     if "user" in st.query_params:
         st.session_state.email = st.query_params["user"]
@@ -164,7 +164,7 @@ def obter_lista_alunos_linha(row):
                 lista.append(nome)
     return lista
 
-# --- FILTRAGEM MATEMÁTICA ORIGINAL DE PENDÊNCIAS ---
+# --- DETERMINAÇÃO MATEMÁTICA ORIGINAL DE PENDÊNCIAS ---
 pendentes = pd.DataFrame()
 total_pendencias_contador = 0
 
@@ -179,7 +179,7 @@ if not df_escalacao.empty:
                 
             alunos_grupo = obter_lista_alunos_linha(row)
             
-            # Cruza e-mail e papel na aba Respostas para listar pendências de alunos reais
+            # Cruza e-mail e papel na aba Respostas para listar pendências de alunos em tempo real
             df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
             avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
@@ -207,7 +207,7 @@ if not df_escalacao.empty:
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
-# --- BOTÃO DE SAÍDA E TRAVA PREVENTIVA ORIGINAL ---
+# --- BOTÃO DE SAÍDA E TRAVA PREVENTIVA ---
 col_user, col_exit = st.columns([3, 1])
 with col_user:
     st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
@@ -345,13 +345,13 @@ else:
                 st.write(f"### 📝 Critérios")
                 
                 notas = {}
-                # CHAVE ORIGINAL HIGIENIZADA COMPATÍVEL
+                # CHAVE ORIGINAL HIGIENIZADA COMPATÍVEL ESTÁTICA
                 cont_idx = 0
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
                     valor_padrao = 0.0 if p == 1 else 0
                     
-                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_{email_user}_{cont_idx}")
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_orig_{email_user}_{cont_idx}")
                     cont_idx += 1
 
                 total = sum(notas.values())
