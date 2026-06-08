@@ -191,7 +191,7 @@ if not df_escalacao.empty:
                 
             alunos_grupo = obter_lista_alunos_linha(row)
             
-            # Padronização de strings para evitar falsos negativos por maiúsculas/minúsculas ou espaços residuais
+            # Padronização matemática exata para ignorar conflitos de strings vazias ou nulas
             df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
             avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().str.lower().tolist()
             alunos_restantes = [a for a in alunos_grupo if str(a).strip().lower() not in avaliados]
@@ -403,14 +403,14 @@ else:
                 st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
                 
                 notas = {}
-                # CHAVE TOTALMENTE FIXA E COMPATÍVEL: Remove qualquer dependência de texto dinâmico para os sliders nunca mais sumirem
-                cont_index_slider = 0
+                # CHAVE DA ESTRUTURA BLINDADA: Garante a renderização usando chaves fixas baseadas no e-mail e critério limpo
+                aluno_chave = str(aluno_alvo_final).replace(" ", "").replace(",", "")
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
                     valor_padrao = 0.0 if p == 1 else 0
                     
-                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"fixed_crivo_key_{email_user}_{cont_index_slider}")
-                    cont_index_slider += 1
+                    item_chave = str(item).replace(" ", "").replace("-", "").replace("/", "")
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_{item_chave}_{aluno_chave}")
 
                 total = sum(notas.values())
                 st.markdown(f"## Nota Atribuída: {total} / {v_max}")
