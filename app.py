@@ -30,7 +30,6 @@ def get_data(aba, ttl_sec=0):
     return conn.read(worksheet=aba, ttl=ttl_sec)
 
 try:
-    # AJUSTE DE FLUXO: ttl_sec zerado para atualização imediata ao apagar ou editar dados na planilha
     df_escalacao = get_data("Escalacao", ttl_sec=0)
     if 'Aptidão Defesa' in df_escalacao.columns:
         df_escalacao['Aptidão Defesa'] = df_escalacao['Aptidão Defesa'].astype(str).replace('nan', '')
@@ -220,14 +219,18 @@ if not df_escalacao.empty:
                 continue
                 
             alunos_grupo = obter_lista_alunos_linha(row)
-            avaliados = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Paper"] == "Orientador")]["Alunos"].tolist()
+            
+            # BLINDAGEM FORÇADA: O filtro agora busca correspondência EXATA de e-mail e papel para não herdar strings da banca!
+            df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
+            avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
+            
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
             
             val_apt = row.get(c_aptidao_col)
             ja_preencheu_aptidao = pd.notna(val_apt) and str(val_apt).strip() != "" and str(val_apt).strip().lower() != "nan"
             precisa_tela_aptidao = ("TCC II" in turma_check or "TCC 2" in turma_check) and not ja_preencheu_aptidao
             
-            if alunos_restantes or precisa_tela_aptidao:
+            if list(alunos_restantes) or precisa_tela_aptidao:
                 linhas_pendentes.append(row)
                 total_pendencias_contador += len(alunos_restantes) + (1 if precisa_tela_aptidao and not alunos_restantes else 0)
         if linhas_pendentes:
@@ -237,7 +240,7 @@ if not df_escalacao.empty:
         if c_av1_email:
             cond_banca |= (df_escalacao[c_av1_email].astype(str).str.lower() == email_user)
         if c_av2_email:
-            cond_banca |= (df_escalacao[df_escalacao[c_av2_email].astype(str).str.lower() == email_user])
+            cond_banca |= (df_escalacao[c_av2_email].astype(str).str.lower() == email_user)
         if c_sup_email:
             cond_banca |= (df_escalacao[c_sup_email].astype(str).str.lower() == email_user)
             
@@ -247,7 +250,7 @@ if not df_escalacao.empty:
             alunos_grupo = obter_lista_alunos_linha(row)
             string_grupo_banca = ", ".join(alunos_grupo)
             
-            ja_avaliou = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Banca") & (df_respostas["Alunos"] == string_grupo_banca)]
+            ja_avaliou = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Banca") & (df_respostas["Alunos"].astype(str).str.strip() == string_grupo_banca.strip())]
             if ja_avaliou.empty and alunos_grupo:
                 linhas_pendentes.append(row)
                 total_pendencias_contador += 1
@@ -350,7 +353,8 @@ else:
             exibir_tela_aptidao_final = False
 
             if eh_orientador:
-                avaliados_na_aba = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Orientador")]["Alunos"].tolist()
+                df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
+                avaliados_na_aba = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
                 lista_alunos_individuais = [a for a in alunos_reais_lista if a not in avaliados_na_aba]
                 
                 if lista_alunos_individuais:
@@ -488,7 +492,18 @@ else:
                     
                     notas = {}
                     for item, (p, help_t) in rubrica.items():
-                        notas[item] = st.slider(f"**{item} ({p} pts)**", 0, p, 0, help=help_t, key=f"s_{item}_{aluno_para_salvar}")
+                        passo_slider = 0.5 if p == 1 else 1
+                        valor_padrao = 0.0 if p == 1 else 0
+                        
+                        notas[item] = st.slider(
+                            f"**{item} ({p} pts)**", 
+                            min_value=valor_padrao, 
+                            max_value=float(p), 
+                            value=valor_padrao, 
+                            step=passo_slider, 
+                            help=help_t, 
+                            key=f"s_{item}_{aluno_para_salvar}"
+                        )
 
                     total = sum(notas.values())
                     st.markdown(f"## Nota Atribuída: {total} / {v_max}")
