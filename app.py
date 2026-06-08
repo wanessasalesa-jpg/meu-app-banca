@@ -1,11 +1,12 @@
 import streamlit as st
 import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 st.title("Sistema Crivo")
 
 try:
-    # Acessa cada chave individualmente
-    creds = {
+    # Cria o dicionário de credenciais usando os campos do Secrets
+    creds_dict = {
         "type": st.secrets["type"],
         "project_id": st.secrets["project_id"],
         "private_key_id": st.secrets["private_key_id"],
@@ -18,12 +19,12 @@ try:
         "client_x509_cert_url": st.secrets["client_x509_cert_url"]
     }
     
-    gc = gspread.service_account_from_dict(creds)
-    # A URL completa da sua planilha (coloque aqui)
-    sh = gc.open_by_url("COLE_AQUI_A_URL_DA_PLANILHA")
-    worksheet = sh.worksheet("Escalacao")
+    # Autoriza e conecta
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    gc = gspread.authorize(creds)
     
-    st.success("Conexão estabelecida!")
-    st.write(worksheet.get_all_values())
+    sh = gc.open_by_url("COLE_AQUI_A_URL_DA_PLANILHA")
+    st.success("Conexão estável!")
 except Exception as e:
-    st.error(f"Erro na conexão: {e}")
+    st.error(f"Erro: {e}")
