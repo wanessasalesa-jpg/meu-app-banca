@@ -52,10 +52,11 @@ if df_escalacao.empty:
     time.sleep(1)
     st.rerun()
 
-# Limpeza e padronização forçada das colunas da Escalação
-for col in df_escalacao.columns:
-    if str(col).strip().lower() in ['aptidão defesa', 'assinatura orientador']:
-        df_escalacao[col] = df_escalacao[col].astype(str).replace('nan', '').str.strip()
+# Limpeza e padronização forçada das colunas de fechamento
+if 'Aptidão Defesa' in df_escalacao.columns:
+    df_escalacao['Aptidão Defesa'] = df_escalacao['Aptidão Defesa'].fillna('').astype(str).str.strip()
+if 'Assinatura Orientador' in df_escalacao.columns:
+    df_escalacao['Assinatura Orientador'] = df_escalacao['Assinatura Orientador'].fillna('').astype(str).str.strip()
 
 # --- MAPEAMENTO DAS COLUNAS DA ESCALAÇÃO ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
@@ -183,11 +184,11 @@ if not df_escalacao.empty:
             if "MCM V" in turma_check or "MCM 5" in turma_check or "TCC I" in turma_check or "TCC 1" in turma_check:
                 continue
                 
-            # CORREÇÃO CRUCIAL: Verificação direta e indexada na linha do Pandas DataFrame
-            val_assinatura_real = str(df_escalacao.loc[idx, c_assinatura_col]).strip() if c_assinatura_col else ""
-            banca_concluida_na_planilha = val_assinatura_real != "" and val_assinatura_real.lower() != "nan"
+            # REGRA ROBUSTA DE ASSINATURA BRANCA/VAZIA
+            val_assinatura_real = str(row.get(c_assinatura_col)).strip() if c_assinatura_col else ""
+            banca_concluida = val_assinatura_real != "" and val_assinatura_real.lower() != "nan" and val_assinatura_real != "None"
             
-            if not banca_concluida_na_planilha:
+            if not banca_concluida:
                 alunos_grupo = obter_lista_alunos_linha(row)
                 df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
                 avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
@@ -306,8 +307,8 @@ else:
                         with st.spinner("Gravando parecer..."):
                             try:
                                 df_atualizar_linha = conn.read(worksheet="Escalacao", ttl=0)
-                                df_atualizar_linha[c_aptidao_col] = df_atualizar_linha[c_aptidao_col].astype(str).replace('nan', '')
-                                df_atualizar_linha[c_assinatura_col] = df_atualizar_linha[c_assinatura_col].astype(str).replace('nan', '')
+                                df_atualizar_linha[c_aptidao_col] = df_atualizar_linha[c_aptidao_col].fillna('').astype(str)
+                                df_atualizar_linha[c_assinatura_col] = df_atualizar_linha[c_assinatura_col].fillna('').astype(str)
                                 
                                 df_atualizar_linha.loc[linha_index_planilha - 2, c_aptidao_col] = str(resposta_aptidao)
                                 df_atualizar_linha.loc[linha_index_planilha - 2, c_assinatura_col] = str(assinatura_texto)
