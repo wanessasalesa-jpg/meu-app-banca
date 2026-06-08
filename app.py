@@ -9,7 +9,7 @@ import random
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
 
-# INJEÇÃO DE CSS ORIGINAL: Fixa o design do botão azul e oculta logs técnicos de reatividade
+# INJEÇÃO DE CSS ORIGINAL: Mantém visual profissional, botão azul clássico e esconde processamentos estruturais
 st.markdown("""
     <style>
     header {visibility: hidden !important;}
@@ -33,6 +33,9 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# Garante atualização imediata limpando cache residual do ambiente na inicialização
+st.cache_data.clear()
+
 # 2. FUSO HORÁRIO DE BRASÍLIA
 fuso_bruta = pytz.timezone('America/Sao_Paulo')
 
@@ -47,7 +50,7 @@ def tratar_nome_curto(nome_completo):
         return f"{partes[0]} {partes[1]}"
     return partes[0]
 
-# 3. CONEXÃO COM GOOGLE SHEETS (USANDO ID DINÂMICO PARA FORÇAR O SHEETS)
+# 3. CONEXÃO COM GOOGLE SHEETS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data_forced(aba):
@@ -63,7 +66,7 @@ if df_escalacao.empty:
     time.sleep(1)
     st.rerun()
 
-# Limpeza absoluta de linhas fantasmas
+# Limpeza de linhas fantasmas da planilha
 df_escalacao = df_escalacao.dropna(how='all')
 if 'Turma' in df_escalacao.columns:
     df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
@@ -173,7 +176,7 @@ def obter_lista_alunos_linha(row):
                 lista.append(nome)
     return lista
 
-# --- FILTRAGEM MATEMÁTICA PURA DE PENDÊNCIAS ---
+# --- PROCESSAMENTO SEGURO DE FILTRAGEM ---
 pendentes = pd.DataFrame()
 total_pendencias_contador = 0
 
@@ -188,15 +191,15 @@ if not df_escalacao.empty:
                 
             alunos_grupo = obter_lista_alunos_linha(row)
             
-            # Conta estritamente quantas avaliações o orientador já salvou para este grupo
+            # Padronização de strings para evitar falsos negativos por maiúsculas/minúsculas ou espaços residuais
             df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
-            avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
-            alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
+            avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().str.lower().tolist()
+            alunos_restantes = [a for a in alunos_grupo if str(a).strip().lower() not in avaliados]
             
             if alunos_restantes:
                 linhas_pendentes.append(row)
                 total_pendencias_contador += len(alunos_restantes)
-        if list(linhas_pendentes):
+        if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
     else:
         cond_banca = pd.Series(False, index=df_escalacao.index)
@@ -216,7 +219,7 @@ if not df_escalacao.empty:
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
-# --- BOTÃO DE SAÍDA COM TRAVA PREVENTIVA ORIGINAL ---
+# --- AMBIENTE VISUAL DO DOCENTE COM TRAVA DE SAÍDA RESTAURADA ---
 col_user, col_exit = st.columns([3, 1])
 with col_user:
     st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
@@ -298,6 +301,7 @@ else:
                 else:
                     st.success("Todos os alunos deste grupo já foram avaliados!")
                     try:
+                        st.cache_data.clear()
                         df_auto = conn.read(worksheet="Escalacao", ttl=0, cache_id=str(random.randint(1,999)))
                         df_auto.loc[linha_index_planilha - 2, c_assinatura_col] = "CONCLUÍDO VIA APP"
                         conn.update(worksheet="Escalacao", data=df_auto)
@@ -325,6 +329,7 @@ else:
                     else:
                         with st.spinner("Gravando parecer..."):
                             try:
+                                st.cache_data.clear()
                                 df_atualizar_linha = conn.read(worksheet="Escalacao", ttl=0, cache_id=str(random.randint(1,999)))
                                 df_atualizar_linha.loc[linha_index_planilha - 2, c_aptidao_col] = str(resposta_aptidao)
                                 df_atualizar_linha.loc[linha_index_planilha - 2, c_assinatura_col] = str(assinatura_texto)
@@ -337,7 +342,7 @@ else:
                             except:
                                 st.error("Erro ao salvar. Tente novamente.")
 
-        # --- TELA 1: FORMULÁRIO DE NOTAS INDIVIDUAIS (CHAVES FIXAS SEGURAS) ---
+        # --- TELA 1: FORMULÁRIO DE NOTAS INDIVIDUAIS ---
         elif exibir_formulario_notas:
             rubrica = {}
             if eh_orientador:
@@ -398,14 +403,14 @@ else:
                 st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
                 
                 notas = {}
-                # CHAVE UNIVERSAL ESTÁTICA CONTROVÉRSIA DE CACHE: Garante a renderização sem depender de loops voláteis
+                # CHAVE TOTALMENTE FIXA E COMPATÍVEL: Remove qualquer dependência de texto dinâmico para os sliders nunca mais sumirem
+                cont_index_slider = 0
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
                     valor_padrao = 0.0 if p == 1 else 0
                     
-                    # Remove caracteres especiais do rótulo para montar uma key estritamente alfanumérica estável
-                    chave_limpa = "".join([c for c in str(item) if c.isalnum()])
-                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"fixed_key_{chave_limpa}")
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"fixed_crivo_key_{email_user}_{cont_index_slider}")
+                    cont_index_slider += 1
 
                 total = sum(notas.values())
                 st.markdown(f"## Nota Atribuída: {total} / {v_max}")
@@ -413,6 +418,7 @@ else:
                 if st.button("🚀 GRAVAR AVALIAÇÃO NO SISTEMA", key="btn_gravar_definitivo_hoje"):
                     with st.spinner("Gravando notas..."):
                         try:
+                            st.cache_data.clear()
                             df_at = conn.read(worksheet="Respostas", ttl=0, cache_id=str(random.randint(1,999)))
                             if df_at.empty or not all(col in df_at.columns for col in colunas_respostas_obrigatorias):
                                 df_at = pd.DataFrame(columns=colunas_respostas_obrigatorias)
