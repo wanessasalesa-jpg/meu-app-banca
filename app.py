@@ -8,7 +8,7 @@ import pytz
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
 
-# INJEÇÃO DE CSS ORIGINAL: Mantém visual profissional, botão azul clássico e esconde processamentos estruturais
+# INJEÇÃO DE CSS ORIGINAL: Garante botão azul na tela inicial e oculta logs técnicos estruturais
 st.markdown("""
     <style>
     header {visibility: hidden !important;}
@@ -46,17 +46,24 @@ def tratar_nome_curto(nome_completo):
         return f"{partes[0]} {partes[1]}"
     return partes[0]
 
-# 3. CONEXÃO COM GOOGLE SHEETS (NATIVA E SEGURA)
+# 3. CONEXÃO SEGURA COM GOOGLE SHEETS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Leitura direta e sem loops infinitos para evitar o travamento de tela
-df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
+# Leitura isolada da Escalação para evitar quebras de execução na tela inicial
+try:
+    df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
+except:
+    df_escalacao = pd.DataFrame()
 
-# Higienização de linhas em branco/fantasmas geradas por deleção manual
-if not df_escalacao.empty:
-    df_escalacao = df_escalacao.dropna(how='all')
-    if 'Turma' in df_escalacao.columns:
-        df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
+if df_escalacao.empty:
+    st.error("Conectando ao banco de dados... Por favor, aguarde um instante.")
+    time.sleep(1)
+    st.rerun()
+
+# Higienização de registros nulos e linhas em branco fantasmas
+df_escalacao = df_escalacao.dropna(how='all')
+if 'Turma' in df_escalacao.columns:
+    df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
 
 # --- MAPEAMENTO DAS COLUNAS DA ESCALAÇÃO ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
@@ -88,12 +95,17 @@ def verificar_presenca_email(email, coluna_real):
         return False
     return email in df_escalacao[coluna_real].astype(str).str.strip().str.lower().unique()
 
-df_respostas = conn.read(worksheet="Respostas", ttl=0)
+# Leitura isolada das Respostas contra falhas temporárias de conexão API
+try:
+    df_respostas = conn.read(worksheet="Respostas", ttl=0)
+except:
+    df_respostas = pd.DataFrame()
+
 colunas_respostas_obrigatorias = ["Avaliador", "Email_Avaliador", "Alunos", "Nota_Final", "Papel", "Data_Hora"]
 if df_respostas.empty or not all(col in df_respostas.columns for col in colunas_respostas_obrigatorias):
     df_respostas = pd.DataFrame(columns=colunas_respostas_obrigatorias)
 
-# --- SISTEMA DE ACESSO ---
+# --- TRATAMENTO DE CREDENCIAIS ---
 if 'email' not in st.session_state:
     if "user" in st.query_params:
         st.session_state.email = st.query_params["user"]
@@ -163,7 +175,7 @@ def obter_lista_alunos_linha(row):
                 lista.append(nome)
     return lista
 
-# --- FILTRAGEM MATEMÁTICA PURA DE PENDÊNCIAS ---
+# --- DETERMINAÇÃO DE PENDÊNCIAS POR HISTÓRICO ---
 pendentes = pd.DataFrame()
 total_pendencias_contador = 0
 
@@ -178,7 +190,6 @@ if not df_escalacao.empty:
                 
             alunos_grupo = obter_lista_alunos_linha(row)
             
-            # Conta as notas já salvas pelo orientador na aba Respostas
             df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
             avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
@@ -388,14 +399,14 @@ else:
                 st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
                 
                 notas = {}
-                # CHAVE CHUMBADA FIXA POR ALUNO: Evita loops voláteis gerando os sliders sem falhas visuais
-                aluno_chave = str(aluno_alvo_final).replace(" ", "").replace(",", "")
+                # CHAVE FIXADA DE FORMA IMUTÁVEL: Associa o e-mail do usuário à contagem física do laço para garantir renderização instantânea
+                cont_idx = 0
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
                     valor_padrao = 0.0 if p == 1 else 0
                     
-                    item_chave = str(item).replace(" ", "").replace("-", "").replace("/", "")
-                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_{item_chave}_{aluno_chave}")
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_{email_user}_{turma_bruta}_{cont_idx}")
+                    cont_idx += 1
 
                 total = sum(notas.values())
                 st.markdown(f"## Nota Atribuída: {total} / {v_max}")
@@ -403,8 +414,6 @@ else:
                 if st.button("🚀 GRAVAR AVALIAÇÃO NO SISTEMA", key="btn_gravar_definitivo_hoje"):
                     with st.spinner("Gravando notas..."):
                         try:
-                            # Limpa cache estritamente no momento do clique para forçar gravação limpa no Sheets
-                            st.cache_data.clear()
                             df_at = conn.read(worksheet="Respostas", ttl=0)
                             if df_at.empty or not all(col in df_at.columns for col in colunas_respostas_obrigatorias):
                                 df_at = pd.DataFrame(columns=colunas_respostas_obrigatorias)
