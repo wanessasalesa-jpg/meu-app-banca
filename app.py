@@ -9,7 +9,7 @@ import random
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
 
-# INJEÇÃO DE CSS ORIGINAL: Oculta elementos estruturais e fixa o design profissional do botão azul clássico
+# INJEÇÃO DE CSS ORIGINAL: Mantém visual profissional, botão azul e esconde processamentos estruturais
 st.markdown("""
     <style>
     header {visibility: hidden !important;}
@@ -33,7 +33,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Força a limpeza do cache local para sincronização imediata
+# Garante atualização imediata limpando cache residual do ambiente na inicialização
 st.cache_data.clear()
 
 # 2. FUSO HORÁRIO DE BRASÍLIA
@@ -66,7 +66,7 @@ if df_escalacao.empty:
     time.sleep(1)
     st.rerun()
 
-# Limpeza e padronização rigorosa das colunas
+# Limpeza e padronização das linhas fantasmas e strings vazias
 df_escalacao = df_escalacao.dropna(how='all')
 if 'Turma' in df_escalacao.columns:
     df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
@@ -232,12 +232,13 @@ with col_exit:
     if st.button("Sair"):
         if total_pendencias_contador > 0:
             st.session_state.tentou_sair_com_pendencia = True
+            st.rerun()
         else:
             st.session_state.clear()
             st.query_params.clear()
             st.rerun()
 
-# TRAVA DE SAÍDA ATIVA
+# EXIBIÇÃO DA TRAVA DE SEGURANÇA SE HOUVER INTEGRANTES SEM NOTA
 if st.session_state.get("tentou_sair_com_pendencia", False):
     st.warning(f"⚠️ **Atenção:** Ainda possui **{total_pendencias_contador}** avaliações pendentes registradas no seu nome!")
     col_cancela, col_confirma = st.columns(2)
@@ -351,7 +352,7 @@ else:
                             except:
                                 st.error("Erro ao salvar. Tente novamente.")
 
-        # --- TELA 1: FORMULÁRIO DE NOTAS INDIVIDUAIS ---
+        # --- TELA 1: FORMULÁRIO DE NOTAS INDIVIDUAIS (RETORNADO AO FLUXO CORRETO) ---
         elif exibir_formulario_notas:
             rubrica = {}
             if eh_orientador:
@@ -397,7 +398,7 @@ else:
                         "Tema": (3, "Clareza tema."), "Resumo": (1, "Qualidade resumo."), "Introdução": (5, "Contextualização."),
                         "Justificativa": (5, "Relevância."), "Objetivos": (5, "Mensuráveis."), "Metodologia": (10, "Desenho estudo."),
                         "Referências": (1, "Normas."), "Apresentação Oral": (10, "Domínio."), "Coerência": (10, "Lógica interna."),
-                        "Qualidade Visual": (9, "Slides."), "Tempo": (1, "Tempo regulamentar.")
+                        "Qualidade Visual": (9, "Recursos."), "Tempo": (1, "Tempo regulamentar.")
                     }
                 elif "TCC II" in turma_bruta or "TCC 2" in turma_bruta or "MCM V" in turma_bruta or "MCM 5" in turma_bruta:
                     rubrica = {
@@ -407,6 +408,7 @@ else:
                         "Tempo": (1, "Tempo regulamentar.")
                     }
 
+            # CORREÇÃO DEFINITIVA: Os Sliders agora são gerados diretamente dentro do fluxo e aparecem na tela
             if rubrica:
                 v_max = sum(p for p, h in rubrica.values())
                 st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
