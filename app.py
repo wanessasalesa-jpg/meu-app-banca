@@ -9,7 +9,7 @@ import random
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
 
-# INJEÇÃO IMEDIATA DE CSS: Corrige botão azul e oculta processamento estrutural
+# INJEÇÃO DE CSS ORIGINAL: Oculta elementos estruturais e fixa o design profissional do botão azul clássico
 st.markdown("""
     <style>
     header {visibility: hidden !important;}
@@ -33,7 +33,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Força a limpeza completa de cache de dados do ambiente Streamlit Cloud
+# Força a limpeza do cache local para sincronização imediata
 st.cache_data.clear()
 
 # 2. FUSO HORÁRIO DE BRASÍLIA
@@ -50,36 +50,33 @@ def tratar_nome_curto(nome_completo):
         return f"{partes[0]} {partes[1]}"
     return partes[0]
 
-# 3. CONEXÃO DIRETA SEM CACHE E SEM MEMÓRIA ANTERIOR (ANTI-FLICKERING)
+# 3. CONEXÃO COM GOOGLE SHEETS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def get_data_forced(aba):
     try:
-        # Passa um token aleatório gerado em tempo real para impedir o servidor de usar dados antigos armazenados
-        df = conn.read(worksheet=aba, ttl=0, cache_id=str(random.randint(1, 100000)))
-        return df
+        return conn.read(worksheet=aba, ttl=0, cache_id=str(random.randint(1, 100000)))
     except:
         return pd.DataFrame()
 
 df_escalacao = get_data_forced("Escalacao")
 
 if df_escalacao.empty:
-    st.error("Sincronizando ambiente com o Banco de Dados... Aguarde um instante.")
+    st.error("Conectando ao banco de dados... Por favor, aguarde um instante.")
     time.sleep(1)
     st.rerun()
 
-# Filtragem definitiva de registros fantasmas e linhas em branco criadas por remoção manual
+# Limpeza e padronização rigorosa das colunas
 df_escalacao = df_escalacao.dropna(how='all')
 if 'Turma' in df_escalacao.columns:
     df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
 
-# Conversão string rigorosa para evitar interpretação de células nulas como float64 ou NaN
 for col in df_escalacao.columns:
     col_limpa = str(col).strip().lower()
     if col_limpa in ['aptidão defesa', 'assinatura orientador', 'email_orientador']:
         df_escalacao[col] = df_escalacao[col].fillna('').astype(str).str.strip()
 
-# --- MAPEAMENTO SEGURO DE COLUNAS ---
+# --- MAPEAMENTO DAS COLUNAS DA ESCALAÇÃO ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
 
 c_av1_email = colunas_reais.get('email_avaliador_1')
@@ -114,7 +111,7 @@ colunas_respostas_obrigatorias = ["Avaliador", "Email_Avaliador", "Alunos", "Not
 if df_respostas.empty or not all(col in df_respostas.columns for col in colunas_respostas_obrigatorias):
     df_respostas = pd.DataFrame(columns=colunas_respostas_obrigatorias)
 
-# --- SISTEMA DE CREDENCIAIS ---
+# --- SISTEMA DE ACESSO ---
 if 'email' not in st.session_state:
     if "user" in st.query_params:
         st.session_state.email = st.query_params["user"]
@@ -184,7 +181,7 @@ def obter_lista_alunos_linha(row):
                 lista.append(nome)
     return lista
 
-# --- PROCESSAMENTO CRÍTICO DE FILTRAGEM ---
+# --- PROCESSAMENTO SEGURO DE FILTRAGEM ---
 pendentes = pd.DataFrame()
 total_pendencias_contador = 0
 
@@ -227,14 +224,33 @@ if not df_escalacao.empty:
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
+# --- AMBIENTE VISUAL DO DOCENTE COM TRAVA DE SAÍDA RESTAURADA ---
 col_user, col_exit = st.columns([3, 1])
 with col_user:
     st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
 with col_exit:
     if st.button("Sair"):
-        st.session_state.clear()
-        st.query_params.clear()
-        st.rerun()
+        if total_pendencias_contador > 0:
+            st.session_state.tentou_sair_com_pendencia = True
+        else:
+            st.session_state.clear()
+            st.query_params.clear()
+            st.rerun()
+
+# TRAVA DE SAÍDA ATIVA
+if st.session_state.get("tentou_sair_com_pendencia", False):
+    st.warning(f"⚠️ **Atenção:** Ainda possui **{total_pendencias_contador}** avaliações pendentes registradas no seu nome!")
+    col_cancela, col_confirma = st.columns(2)
+    with col_cancela:
+        if st.button("🔄 Voltar e Avaliar"):
+            st.session_state.tentou_sair_com_pendencia = False
+            st.rerun()
+    with col_confirma:
+        if st.button("🏃 Sair Mesmo Assim"):
+            st.session_state.clear()
+            st.query_params.clear()
+            st.rerun()
+    st.stop()
 
 if pendentes.empty:
     st.balloons()
