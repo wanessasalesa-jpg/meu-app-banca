@@ -46,24 +46,17 @@ def tratar_nome_curto(nome_completo):
         return f"{partes[0]} {partes[1]}"
     return partes[0]
 
-# 3. CONEXÃO SEGURA COM GOOGLE SHEETS
+# 3. CONEXÃO ESTÁVEL COM GOOGLE SHEETS (SEM RE-RUN INFINITO)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Leitura isolada da Escalação para evitar quebras de execução na tela inicial
-try:
-    df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
-except:
-    df_escalacao = pd.DataFrame()
+# Leitura direta padrão do Streamlit
+df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
 
-if df_escalacao.empty:
-    st.error("Conectando ao banco de dados... Por favor, aguarde um instante.")
-    time.sleep(1)
-    st.rerun()
-
-# Higienização de registros nulos e linhas em branco fantasmas
-df_escalacao = df_escalacao.dropna(how='all')
-if 'Turma' in df_escalacao.columns:
-    df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
+# Limpeza segura de linhas fantasmas
+if not df_escalacao.empty:
+    df_escalacao = df_escalacao.dropna(how='all')
+    if 'Turma' in df_escalacao.columns:
+        df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
 
 # --- MAPEAMENTO DAS COLUNAS DA ESCALAÇÃO ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
@@ -95,17 +88,12 @@ def verificar_presenca_email(email, coluna_real):
         return False
     return email in df_escalacao[coluna_real].astype(str).str.strip().str.lower().unique()
 
-# Leitura isolada das Respostas contra falhas temporárias de conexão API
-try:
-    df_respostas = conn.read(worksheet="Respostas", ttl=0)
-except:
-    df_respostas = pd.DataFrame()
-
+df_respostas = conn.read(worksheet="Respostas", ttl=0)
 colunas_respostas_obrigatorias = ["Avaliador", "Email_Avaliador", "Alunos", "Nota_Final", "Papel", "Data_Hora"]
 if df_respostas.empty or not all(col in df_respostas.columns for col in colunas_respostas_obrigatorias):
     df_respostas = pd.DataFrame(columns=colunas_respostas_obrigatorias)
 
-# --- TRATAMENTO DE CREDENCIAIS ---
+# --- SISTEMA DE ACESSO ---
 if 'email' not in st.session_state:
     if "user" in st.query_params:
         st.session_state.email = st.query_params["user"]
@@ -175,7 +163,7 @@ def obter_lista_alunos_linha(row):
                 lista.append(nome)
     return lista
 
-# --- DETERMINAÇÃO DE PENDÊNCIAS POR HISTÓRICO ---
+# --- FILTRAGEM MATEMÁTICA PURA DE PENDÊNCIAS ---
 pendentes = pd.DataFrame()
 total_pendencias_contador = 0
 
@@ -190,6 +178,7 @@ if not df_escalacao.empty:
                 
             alunos_grupo = obter_lista_alunos_linha(row)
             
+            # Checa estritamente se o e-mail do orientador logado já salvou uma nota para aquele aluno na aba Respostas
             df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
             avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
@@ -399,14 +388,13 @@ else:
                 st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
                 
                 notas = {}
-                # CHAVE FIXADA DE FORMA IMUTÁVEL: Associa o e-mail do usuário à contagem física do laço para garantir renderização instantânea
-                cont_idx = 0
+                # CHAVE DA ESTRUTURA BLINDADA ORIGINAL: Usa chaves estritamente baseadas no rótulo alfanumérico limpo
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
                     valor_padrao = 0.0 if p == 1 else 0
                     
-                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_{email_user}_{turma_bruta}_{cont_idx}")
-                    cont_idx += 1
+                    chave_limpa = "".join([c for c in str(item) if c.isalnum()])
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_orig_{chave_limpa}")
 
                 total = sum(notas.values())
                 st.markdown(f"## Nota Atribuída: {total} / {v_max}")
