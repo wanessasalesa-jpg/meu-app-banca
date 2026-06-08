@@ -1,16 +1,11 @@
 import streamlit as st
-import pandas as pd
-from streamlit_gsheets import GSheetsConnection
 
-# Configuração básica
-st.set_page_config(page_title="CRIVO - Teste de Conexão")
+st.title("Teste de Conexão")
 
-# Tenta conectar
 try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
+    conn = st.connection("gsheets", type="gsheets")
     df = conn.read(worksheet="Escalacao", ttl=0)
-    st.success("Conexão realizada! A planilha foi encontrada.")
-    st.write(df.head()) # Mostra as primeiras linhas para confirmar que os dados chegaram
+    st.success("Conexão feita! A planilha foi lida.")
+    st.write(df.head())
 except Exception as e:
-    st.error(f"Erro ao conectar: {e}")
-    st.write("Se o erro persistir, verifique se o link da planilha no Secrets está correto.")
+    st.error(f"Erro detectado: {e}")
