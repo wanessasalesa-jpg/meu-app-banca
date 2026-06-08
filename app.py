@@ -5,10 +5,9 @@ from datetime import datetime
 import time
 import pytz 
 
-# 1. CONFIGURAÇÃO DA PÁGINA ACTIVE
+# Configuration
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
 
-# INJEÇÃO DE CSS INSTITUCIONAL: Fixa o design do botão azul clássico e limpa elementos nativos do Streamlit
 st.markdown("""
     <style>
     header {visibility: hidden !important;}
@@ -27,7 +26,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. FUSO HORÁRIO DE BRASÍLIA
 fuso_bruta = pytz.timezone('America/Sao_Paulo')
 
 def obter_agora():
@@ -41,18 +39,20 @@ def tratar_nome_curto(nome_completo):
         return f"{partes[0]} {partes[1]}"
     return partes[0]
 
-# 3. CONEXÃO DIRETA COM O BANCO DE DADOS
+# Google Sheets Connection
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Leitura crua e direta: Se houver erro na planilha, o Streamlit vai mostrar exatamente qual é o problema
 df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
 
-# Limpeza básica de linhas totalmente vazias
+if df_escalacao.empty:
+    st.warning("Carregando base de dados acadêmica... Aguarde um instante.")
+    time.sleep(1)
+    st.rerun()
+
 df_escalacao = df_escalacao.dropna(how='all')
 if 'Turma' in df_escalacao.columns:
     df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
 
-# --- MAPEAMENTO DAS COLUNASAtivas ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
 
 c_av1_email = colunas_reais.get('email_avaliador_1')
@@ -84,7 +84,6 @@ colunas_respostas_obrigatorias = ["Avaliador", "Email_Avaliador", "Alunos", "Not
 if df_respostas.empty or not all(col in df_respostas.columns for col in colunas_respostas_obrigatorias):
     df_respostas = pd.DataFrame(columns=colunas_respostas_obrigatorias)
 
-# --- SISTEMA DE ACESSO ---
 if 'email' not in st.session_state:
     if "user" in st.query_params:
         st.session_state.email = st.query_params["user"]
@@ -154,7 +153,6 @@ def obter_lista_alunos_linha(row):
                 lista.append(nome)
     return lista
 
-# --- PROCESSAMENTO SEGURO DE PENDÊNCIAS POR HISTÓRICO ---
 pendentes = pd.DataFrame()
 total_pendencias_contador = 0
 
@@ -168,8 +166,6 @@ if not df_escalacao.empty:
                 continue
                 
             alunos_grupo = obter_lista_alunos_linha(row)
-            
-            # Conta as notas já salvas cruzando o e-mail do orientador logado na aba Respostas
             df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
             avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
@@ -197,7 +193,6 @@ if not df_escalacao.empty:
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
-# --- TRAVA DE SEGURANÇA CONTRA SAÍDA PREVENTIVA ---
 col_user, col_exit = st.columns([3, 1])
 with col_user:
     st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
@@ -275,7 +270,6 @@ else:
                 exibir_formulario_notas = False
                 st.success("Todos os alunos deste grupo já foram avaliados!")
 
-        # --- TELA 1: FORMULÁRIO DE NOTAS INDIVIDUAIS ---
         if exibir_formulario_notas:
             rubrica = {}
             if eh_orientador:
@@ -304,7 +298,7 @@ else:
                         "Responsabilidade com a Aprendizagem": (3, "Responsabilidade evidente."),
                         "Artigo Estruturação e Escrita Científica": (5, "Fluidez e concisão."),
                         "Artigo Fundamentação e Atualização Bibliográfica": (4, "Fundamentação crítica."),
-                        "Artigo Apresentação e Discussão dos Resultados": (4, "Discussão crítica."),
+                        "Artigo Apresentação e Discussion dos Resultados": (4, "Discussão crítica."),
                         "Artigo Rigor Metodológico": (4, "Métodos bem descritos."),
                         "Artigo Conclusão e Relevância Científica": (3, "Conclusão clara.")
                     }
@@ -335,14 +329,13 @@ else:
                 st.write(f"### 📝 Critérios")
                 
                 notas = {}
-                # CHAVE ORIGINAL HIGIENIZADA COMPATÍVEL ESTÁTICA: Vincula o critério limpo ao nome curto do aluno
-                aluno_chave = str(aluno_alvo_final).replace(" ", "").replace(",", "")
+                cont_idx = 0
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
                     valor_padrao = 0.0 if p == 1 else 0
                     
-                    item_chave = str(item).replace(" ", "").replace("-", "").replace("/", "")
-                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_orig_{item_chave}_{aluno_chave}")
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_orig_{email_user}_{cont_idx}")
+                    cont_idx += 1
 
                 total = sum(notas.values())
                 st.markdown(f"## Nota Atribuída: {total}")
