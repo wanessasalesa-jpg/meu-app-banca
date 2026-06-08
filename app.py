@@ -4,24 +4,23 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import datetime, timedelta
 import time
 import pytz 
+import random
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
 
-# INJEÇÃO IMEDIATA DE CSS: Corrige o botão azul na tela inicial e oculta códigos em processamento
+# INJEÇÃO IMEDIATA DE CSS: Corrige botão azul e oculta processamento estrutural
 st.markdown("""
     <style>
     header {visibility: hidden !important;}
     #MainMenu {visibility: hidden !important;}
     footer {visibility: hidden;}
     
-    /* Oculta dumps de códigos e mensagens nativas estruturais */
     .stException, .stDetails, div[data-testid="stNotification"] code, pre, code {
         display: none !important;
         visibility: hidden !important;
     }
     
-    /* Força o design profissional do botão azul clássico institucional */
     .stButton button {
         width: 100% !important;
         border-radius: 10px !important;
@@ -34,7 +33,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# FORCE CLEAR CACHE: Garante que o app esqueça qualquer dado antigo deletado na planilha
+# Força a limpeza completa de cache de dados do ambiente Streamlit Cloud
 st.cache_data.clear()
 
 # 2. FUSO HORÁRIO DE BRASÍLIA
@@ -51,34 +50,36 @@ def tratar_nome_curto(nome_completo):
         return f"{partes[0]} {partes[1]}"
     return partes[0]
 
-# 3. CONEXÃO COM GOOGLE SHEETS
+# 3. CONEXÃO DIRETA SEM CACHE E SEM MEMÓRIA ANTERIOR (ANTI-FLICKERING)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def get_data(aba):
+def get_data_forced(aba):
     try:
-        return conn.read(worksheet=aba, ttl=0)
+        # Passa um token aleatório gerado em tempo real para impedir o servidor de usar dados antigos armazenados
+        df = conn.read(worksheet=aba, ttl=0, cache_id=str(random.randint(1, 100000)))
+        return df
     except:
         return pd.DataFrame()
 
-df_escalacao = get_data("Escalacao")
+df_escalacao = get_data_forced("Escalacao")
 
 if df_escalacao.empty:
-    st.error("Conectando ao banco de dados... Por favor, aguarde um instante.")
+    st.error("Sincronizando ambiente com o Banco de Dados... Aguarde um instante.")
     time.sleep(1)
     st.rerun()
 
-# --- LIMPEZA DE LINHAS FANTASMAS (ELIMINA O ERRO DE TELA CONCLUÍDA PREMATURA) ---
+# Filtragem definitiva de registros fantasmas e linhas em branco criadas por remoção manual
 df_escalacao = df_escalacao.dropna(how='all')
 if 'Turma' in df_escalacao.columns:
     df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
 
-# Padronização e higienização das colunas novas de controle
-if 'Aptidão Defesa' in df_escalacao.columns:
-    df_escalacao['Aptidão Defesa'] = df_escalacao['Aptidão Defesa'].fillna('').astype(str).str.strip()
-if 'Assinatura Orientador' in df_escalacao.columns:
-    df_escalacao['Assinatura Orientador'] = df_escalacao['Assinatura Orientador'].fillna('').astype(str).str.strip()
+# Conversão string rigorosa para evitar interpretação de células nulas como float64 ou NaN
+for col in df_escalacao.columns:
+    col_limpa = str(col).strip().lower()
+    if col_limpa in ['aptidão defesa', 'assinatura orientador', 'email_orientador']:
+        df_escalacao[col] = df_escalacao[col].fillna('').astype(str).str.strip()
 
-# --- MAPEAMENTO DAS COLUNAS DA ESCALAÇÃO ---
+# --- MAPEAMENTO SEGURO DE COLUNAS ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
 
 c_av1_email = colunas_reais.get('email_avaliador_1')
@@ -108,12 +109,12 @@ def verificar_presenca_email(email, coluna_real):
         return False
     return email in df_escalacao[coluna_real].astype(str).str.strip().str.lower().unique()
 
-df_respostas = get_data("Respostas")
+df_respostas = get_data_forced("Respostas")
 colunas_respostas_obrigatorias = ["Avaliador", "Email_Avaliador", "Alunos", "Nota_Final", "Papel", "Data_Hora"]
 if df_respostas.empty or not all(col in df_respostas.columns for col in colunas_respostas_obrigatorias):
     df_respostas = pd.DataFrame(columns=colunas_respostas_obrigatorias)
 
-# --- LOGIN E LOGOUT ---
+# --- SISTEMA DE CREDENCIAIS ---
 if 'email' not in st.session_state:
     if "user" in st.query_params:
         st.session_state.email = st.query_params["user"]
@@ -133,7 +134,7 @@ if 'email' not in st.session_state:
                 st.query_params["user"] = email_limpo
                 st.rerun()
             else:
-                st.error("E-mail não autorizado ou não encontrado.")
+                st.error("E-mail não autorizado ou não encontrado na escalação ativa.")
     st.stop()
 
 email_user = st.session_state.email
@@ -183,7 +184,7 @@ def obter_lista_alunos_linha(row):
                 lista.append(nome)
     return lista
 
-# --- PROCESSAMENTO DE FILTRAGEM ---
+# --- PROCESSAMENTO CRÍTICO DE FILTRAGEM ---
 pendentes = pd.DataFrame()
 total_pendencias_contador = 0
 
@@ -196,10 +197,10 @@ if not df_escalacao.empty:
             if "MCM V" in turma_check or "MCM 5" in turma_check or "TCC I" in turma_check or "TCC 1" in turma_check:
                 continue
                 
-            val_assinatura_real = str(row.get(c_assinatura_col)).strip() if c_assinatura_col else ""
-            banca_concluida = val_assinatura_real != "" and val_assinatura_real.lower() != "nan" and val_assinatura_real != "none"
+            # CHECAGEM ROBUSTA: Descobre se a assinatura na planilha de fato existe ignorando lixos eletrônicos de células
+            val_assinatura_real = str(row.get(c_assinatura_col)).strip().replace('nan', '') if c_assinatura_col else ""
             
-            if not banca_concluida:
+            if val_assinatura_real == "" or val_assinatura_real.lower() == "none":
                 alunos_grupo = obter_lista_alunos_linha(row)
                 df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
                 avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
@@ -290,7 +291,9 @@ else:
                 else:
                     st.success("Todos os alunos deste grupo já foram avaliados!")
                     try:
-                        df_auto = conn.read(worksheet="Escalacao", ttl=0)
+                        # Força salvamento direto na planilha quebrando cache antigo
+                        st.cache_data.clear()
+                        df_auto = conn.read(worksheet="Escalacao", ttl=0, cache_id=str(random.randint(1,999)))
                         df_auto.loc[linha_index_planilha - 2, c_assinatura_col] = "CONCLUÍDO VIA APP"
                         conn.update(worksheet="Escalacao", data=df_auto)
                         st.session_state["grupo_selecionado"] = ""
@@ -312,17 +315,18 @@ else:
                 assinatura_texto = st.text_input("**Assinatura Digital (Digite seu Nome Completo para assinar):**").strip()
                 
                 if st.form_submit_button("🚀 ENVIAR PARECER E CONCLUIR BANCA"):
-                    if resposta_aptidao == "" or assinatura_texto == "":
+                    if resposta_aptidao == "" or signature_text := assinatura_texto == "":
                         st.error("Preencha todos os campos obrigatórios.")
                     else:
                         with st.spinner("Gravando parecer..."):
                             try:
-                                df_atualizar_linha = conn.read(worksheet="Escalacao", ttl=0)
+                                st.cache_data.clear()
+                                df_atualizar_linha = conn.read(worksheet="Escalacao", ttl=0, cache_id=str(random.randint(1,999)))
                                 df_atualizar_linha[c_aptidao_col] = df_atualizar_linha[c_aptidao_col].fillna('').astype(str)
                                 df_atualizar_linha[c_assinatura_col] = df_atualizar_linha[c_assinatura_col].fillna('').astype(str)
                                 
                                 df_atualizar_linha.loc[linha_index_planilha - 2, c_aptidao_col] = str(resposta_aptidao)
-                                df_atualizar_linha.loc[linha_index_planilha - 2, c_assinatura_col] = str(assinatura_texto)
+                                df_atualizar_linha.loc[linha_index_planilha - 2, c_assinatura_col] = str(signature_text)
                                 
                                 conn.update(worksheet="Escalacao", data=df_atualizar_linha)
                                 st.balloons()
@@ -346,7 +350,7 @@ else:
                         "Desenv. - Pontualidade e Compromisso": (5, "Pontualidade mantida."),
                         "Responsabilidade com a Aprendizagem": (5, "Responsabilidade evidente."),
                         "Texto - Justificativa do Estudo": (6, "Clareza na relevância."),
-                        "Texto - Objetivo Geral e Específicos": (6, "Objetivos bem formulados."),
+                        "Texto - Objective Geral e Específicos": (6, "Objetivos bem formulados."),
                         "Texto - Fundamentação Teórica / Referências": (6, "Referencial teórico relevante."),
                         "Texto - Metodologia Proposta": (6, "Método bem descrito."),
                         "Texto - Cronograma de Execução": (3, "Cronograma estruturado."),
@@ -405,9 +409,8 @@ else:
                 if st.button("🚀 GRAVAR AVALIAÇÃO NO SISTEMA", key=f"btn_save_{aluno_alvo_final}"):
                     with st.spinner("Gravando notas..."):
                         try:
-                            # Força a limpeza antes de gravar para garantir sincronia absoluta
                             st.cache_data.clear()
-                            df_at = conn.read(worksheet="Respostas", ttl=0)
+                            df_at = conn.read(worksheet="Respostas", ttl=0, cache_id=str(random.randint(1,999)))
                             if df_at.empty or not all(col in df_at.columns for col in colunas_respostas_obrigatorias):
                                 df_at = pd.DataFrame(columns=colunas_respostas_obrigatorias)
                             
