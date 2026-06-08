@@ -9,7 +9,7 @@ import random
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
 
-# INJEÇÃO DE CSS ORIGINAL: Mantém visual profissional, botão azul e esconde processamentos estruturais
+# INJEÇÃO DE CSS ORIGINAL: Mantém visual profissional, botão azul clássico e esconde processamentos estruturais
 st.markdown("""
     <style>
     header {visibility: hidden !important;}
@@ -194,9 +194,11 @@ if not df_escalacao.empty:
             if "MCM V" in turma_check or "MCM 5" in turma_check or "TCC I" in turma_check or "TCC 1" in turma_check:
                 continue
                 
-            val_assinatura_real = str(row.get(c_assinatura_col)).strip().replace('nan', '') if c_assinatura_col else ""
+            # CORREÇÃO DA LEITURA INDEXADA (Evita o erro de carregar tudo concluído)
+            val_assinatura_real = str(df_escalacao.loc[idx, c_assinatura_col]).strip() if c_assinatura_col else ""
+            banca_concluida = val_assinatura_real != "" and val_assinatura_real.lower() != "nan" and val_assinatura_real != "none"
             
-            if val_assinatura_real == "" or val_assinatura_real.lower() == "none":
+            if not banca_concluida:
                 alunos_grupo = obter_lista_alunos_linha(row)
                 df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
                 avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
@@ -224,7 +226,7 @@ if not df_escalacao.empty:
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
-# --- AMBIENTE VISUAL DO DOCENTE COM TRAVA DE SAÍDA RESTAURADA ---
+# --- AMBIENTE VISUAL DO DOCENTE COM TRAVA DE SAÍDA EXIGIDA RESTAURADA ---
 col_user, col_exit = st.columns([3, 1])
 with col_user:
     st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
@@ -413,13 +415,15 @@ else:
                 st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
                 
                 notas = {}
-                # CORREÇÃO CHAVE ÚNICA: Cria chaves puramente numéricas para os sliders nunca mais sumirem
-                cont_index = 0
+                # CORREÇÃO VISUAL DEFINITIVA E COMPATÍVEL: Chave estática e única usando o nome do critério + nome limpo do alvo avaliado
+                chave_alvo_limpa = str(aluno_alvo_final).replace(",", "").replace(" ", "")
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
                     valor_padrao = 0.0 if p == 1 else 0
-                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_n_{cont_index}")
-                    cont_index += 1
+                    
+                    # Nome do critério limpo para garantir chaves estáveis no Streamlit
+                    item_chave = str(item).replace(" ", "").replace("-", "").replace("/", "")
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_{item_chave}_{chave_alvo_limpa}")
 
                 total = sum(notas.values())
                 st.markdown(f"## Nota Atribuída: {total} / {v_max}")
