@@ -1,15 +1,25 @@
 import streamlit as st
 import gspread
-from google.oauth2.service_account import Credentials
+import pandas as pd
+import json
 
 st.title("Sistema Crivo - Conexão Direta")
 
-# Aqui o sistema vai ler a chave que você vai colocar no Secrets
+# Carrega as credenciais do Secrets
+# Você precisará colocar o seu JSON lá dentro como uma string única
 try:
-    # Se você ainda tiver o seu JSON, vamos usá-lo
-    # Caso contrário, vamos tentar apenas o link
-    st.write("Tentando conectar...")
-    # O código abaixo é apenas um teste de vida
-    st.success("O sistema está rodando!")
+    credentials_dict = json.loads(st.secrets["gcp_service_account"])
+    
+    # Conexão
+    gc = gspread.service_account_from_dict(credentials_dict)
+    sh = gc.open_by_url("SUA_URL_DA_PLANILHA_AQUI")
+    worksheet = sh.worksheet("Escalacao")
+    
+    data = worksheet.get_all_values()
+    df = pd.DataFrame(data[1:], columns=data[0])
+    
+    st.success("Conexão direta estabelecida!")
+    st.dataframe(df)
+    
 except Exception as e:
-    st.error(f"Erro: {e}")
+    st.error(f"Erro na conexão: {e}")
