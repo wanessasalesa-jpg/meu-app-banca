@@ -48,10 +48,16 @@ c_sup_nome = colunas_reais.get('avaliador_suplente')
 c_ori_email = colunas_reais.get('email_orientador')
 c_ori_nome = colunas_reais.get('orientador')
 c_turma = colunas_reais.get('turma')
-c_alunos = colunas_reais.get('alunos')
 c_titulo = colunas_reais.get('titulo')
 c_data = colunas_reais.get('data')
 c_horario = colunas_reais.get('horario')
+
+# MAPEAMENTO DAS NOVAS COLUNAS SEPARADAS DE ALUNOS
+c_aluno1 = colunas_reais.get('aluno_1')
+c_aluno2 = colunas_reais.get('aluno_2')
+c_aluno3 = colunas_reais.get('aluno_3')
+c_aluno4 = colunas_reais.get('aluno_4')
+c_aluno5 = colunas_reais.get('aluno_5')
 
 # FUNÇÃO AUXILIAR PARA CHECAR SE O EMAIL EXISTE NA COLUNA MAPEADA
 def verificar_presenca_email(email, coluna_real):
@@ -79,7 +85,7 @@ if 'email' not in st.session_state:
     st.caption("© 2026 Desenvolvido por Wanessa Sales de Almeida")
     st.divider()
 
-    st.write("### Identificação do Docente")
+    st.write("### Identification do Docente")
     email_raw = st.text_input("Digite seu e-mail cadastrado:").strip()
     if st.button("Acessar Sistema"):
         if email_raw:
@@ -120,7 +126,6 @@ elif verificar_presenca_email(email_user, c_sup_email):
 nome_exibicao = tratar_nome_curto(nome_completo_docente)
 
 # --- DEFINIÇÃO DINÂMICA DE CORES (CSS TOTALMENTE REESTRUTURADO) ---
-# Azul escuro institucional para banca, Pink marcante para orientação
 cor_primaria = "#002147" if not eh_orientador else "#FF1493"
 cor_texto_bloco = "#ffffff"
 
@@ -130,7 +135,6 @@ st.markdown(f"""
     #MainMenu {{visibility: hidden !important;}}
     footer {{visibility: hidden;}}
     
-    /* Injeção de bloco colorido imponente no cabeçalho */
     .bloco-cabecalho {{
         background-color: {cor_primaria} !important;
         padding: 25px !important;
@@ -145,7 +149,6 @@ st.markdown(f"""
         padding: 2px 0 !important;
     }}
     
-    /* Estilização forçada de botões do sistema */
     .stButton button {{
         width: 100% !important;
         border-radius: 10px !important;
@@ -158,7 +161,6 @@ st.markdown(f"""
     </style>
     """, unsafe_allow_html=True)
 
-# CABEÇALHO EM BLOCO IMPACTANTE COM AS CORES DO PAPEL
 sub_titulo_texto = "Sistema de Gestão de Bancas Acadêmicas" if not eh_orientador else "Sistema de Gestão de Orientações"
 st.markdown(f"""
     <div class="bloco-cabecalho">
@@ -168,16 +170,26 @@ st.markdown(f"""
     </div>
     """, unsafe_allow_html=True)
 
+# FUNÇÃO AUXILIAR PARA PEGAR LISTA DE ALUNOS DE UMA LINHA DA ESCALAÇÃO
+def obter_lista_alunos_linha(row):
+    lista = []
+    for col_aluno in [c_aluno1, c_aluno2, c_aluno3, c_aluno4, c_aluno5]:
+        if col_aluno and col_aluno in row and pd.notna(row[col_aluno]):
+            nome = str(row[col_aluno]).strip()
+            if nome and nome.lower() != "nan" and nome != "":
+                lista.append(nome)
+    return lista
+
 # --- FILTRAGEM DE GRUPOS PENDENTES EM TEMPO REAL ---
 pendentes = pd.DataFrame()
 total_pendencias_contador = 0
 
-if not df_escalacao.empty and c_alunos:
+if not df_escalacao.empty:
     if eh_orientador:
         possiveis = df_escalacao[df_escalacao[c_ori_email].astype(str).str.lower() == email_user].copy()
         linhas_pendentes = []
         for idx, row in possiveis.iterrows():
-            alunos_grupo = [a.strip() for a in str(row[c_alunos]).split(",") if a.strip()]
+            alunos_grupo = obter_lista_alunos_linha(row)
             avaliados = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Orientador")]["Alunos"].tolist()
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
             
@@ -196,11 +208,19 @@ if not df_escalacao.empty and c_alunos:
             cond_banca |= (df_escalacao[c_sup_email].astype(str).str.lower() == email_user)
             
         possiveis = df_escalacao[cond_banca].copy()
-        items_feitos = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Banca")]["Alunos"].tolist()
-        pendentes = possiveis[~possiveis[c_alunos].isin(items_feitos)].copy()
-        total_pendencias_contador = len(pendentes)
+        linhas_pendentes = []
+        for idx, row in possiveis.iterrows():
+            alunos_grupo = obter_lista_alunos_linha(row)
+            string_grupo_banca = ", ".join(alunos_grupo)
+            
+            já_avaliou = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Banca") & (df_respostas["Alunos"] == string_grupo_banca)]
+            if já_avaliou.empty and alunos_grupo:
+                linhas_pendentes.append(row)
+                total_pendencias_contador += 1
+        if linhas_pendentes:
+            pendentes = pd.DataFrame(linhas_pendentes)
 
-# --- AMBIENTE VISUAL DO DOCENTE COM BLOCO DE SAÍDA SEGURO ---
+# --- AMBIENTE VISUAL DO DOCENTE ---
 col_user, col_exit = st.columns([3, 1])
 with col_user:
     st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
@@ -213,7 +233,6 @@ with col_exit:
             st.query_params.clear()
             st.rerun()
 
-# --- POPUP / AVISO DE CONFIRMAÇÃO DE SAÍDA ---
 if st.session_state.get("tentou_sair_com_pendencia", False):
     st.warning(f"⚠️ **Atenção:** Você ainda possui **{total_pendencias_contador}** avaliações pendentes registradas em seu nome!")
     col_cancela, col_confirma = st.columns(2)
@@ -232,17 +251,21 @@ if pendentes.empty:
     st.balloons()
     st.success("🎉 Todas as suas avaliações pendentes foram concluídas!")
 else:
-    pendentes['Alunos_Curto'] = pendentes[c_alunos].apply(lambda x: ", ".join([tratar_nome_curto(n) for n in str(x).split(",")]))
-    lista_grupos_display = pendentes["Alunos_Curto"].tolist()
-    lista_grupos_reais = pendentes[c_alunos].tolist()
+    # Cria a string visual do grupo para o Selectbox
+    def gerar_display_grupo(row):
+        alunos = obter_lista_alunos_linha(row)
+        return ", ".join([tratar_nome_curto(n) for n in alunos])
+        
+    pendentes['Display_Grupo'] = pendentes.apply(gerar_display_grupo, axis=1)
+    lista_grupos_display = pendentes["Display_Grupo"].tolist()
     
-    grupo_map = dict(zip(lista_grupos_display, lista_grupos_reais))
     selecionado_display = st.selectbox("🎯 Escolha o Grupo para Avaliar:", [""] + lista_grupos_display)
 
     if selecionado_display and selecionado_display != "":
-        aluno_selecionado = grupo_map[selecionado_display]
-        dados = pendentes[pendentes[c_alunos] == aluno_selecionado].iloc[0]
+        dados = pendentes[pendentes["Display_Grupo"] == selecionado_display].iloc[0]
         turma_bruta = str(dados[c_turma]).strip().upper() if c_turma else ""
+        alunos_reais_lista = obter_lista_alunos_linha(dados)
+        string_grupo_completo = ", ".join(alunos_reais_lista)
         
         # --- TRAVA DE HORÁRIO RÍGIDA (5 MINUTOS ANTES) ---
         banca_liberada = True
@@ -267,13 +290,13 @@ else:
             st.write(f"**Turma:** {turma_bruta}")
             st.write(f"**Título:** {dados[c_titulo] if c_titulo else ''}")
             st.write(f"**Orientador:** {tratar_nome_curto(dados[c_ori_nome]) if c_ori_nome else ''}")
-            st.write(f"**Integrantes do Grupo:** {aluno_selecionado}")
+            st.write(f"**Integrantes do Grupo:** {string_grupo_completo}")
             st.write(f"**Data/Horário Cadastrado:** {dados[c_data] if c_data else ''} às {dados[c_horario] if c_horario else ''}")
 
         if not banca_liberada:
             st.warning(msg_trava)
         else:
-            aluno_alvo_final = aluno_selecionado
+            aluno_alvo_final = string_grupo_completo
             exibir_formulario = True
 
             if eh_orientador:
@@ -281,9 +304,8 @@ else:
                     exibir_formulario = False
                     st.warning("⚠️ Nota do orientador não aplicável para esta turma. A turma MCM V possui 100% da nota final atribuída exclusivamente pela banca examinadora.")
                 else:
-                    lista_alunos_individuais = [a.strip() for a in str(aluno_selecionado).split(",") if a.strip()]
                     avaliados_na_aba = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Orientador")]["Alunos"].tolist()
-                    lista_alunos_individuais = [a for a in lista_alunos_individuais if a not in avaliados_na_aba]
+                    lista_alunos_individuais = [a for a in alunos_reais_lista if a not in avaliados_na_aba]
                     
                     if lista_alunos_individuais:
                         aluno_alvo_final = st.selectbox("👤 Selecione o Aluno para atribuir a nota individual:", lista_alunos_individuais)
@@ -323,7 +345,7 @@ else:
                                 "Discente - Pontualidade e Compromisso": (3, "Pontualidade é mantida consistentemente, demonstrando compromisso com os prazos."),
                                 "Responsabilidade com a Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e de aprimoramento."),
                                 "Projeto - Formulação do Problema e Justificativa": (5, "Problema de pesquisa é excepcionalmente formulado, e a justificativa é altamente persuasiva, atualizada e relevante."),
-                                "Projeto - Objetivos e Hipóteses": (4, "Objetivos são bem formulados and alinhados, e as hipóteses são pertinentes e testáveis."),
+                                "Projeto - Objetivos e Hipóteses": (4, "Objetivos são bem formulados e alinhados, e as hipóteses são pertinentes e testáveis."),
                                 "Projeto - Revisão de Literatura": (4, "Revisão de literatura é abrangente, crítica e identifica claramente a relevância do estudo na literatura existente."),
                                 "Projeto - Metodologia e ABNT": (4, "Metodologia é detalhada e abrangente, proporcionando uma compreensão completa; projeto formatado conforme ABNT."),
                                 "Projeto - Considerações Éticas e Viabilidade": (3, "Considerações éticas são discutidas de maneira apropriada, e a viabilidade do estudo é abordada.")
@@ -422,7 +444,7 @@ else:
                                     conn.update(worksheet="Respostas", data=df_f)
                                     
                                     st.balloons()
-                                    st.success(f"✅ Avaliação de {tratar_nome_curto(aluno_para_salvar)} gravada com sucesso!")
+                                    st.success(f"✅ Avaliação gravada com sucesso!")
                                     time.sleep(1.5)
                                     st.rerun()
                                 except:
