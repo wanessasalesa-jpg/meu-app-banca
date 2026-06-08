@@ -66,15 +66,10 @@ if df_escalacao.empty:
     time.sleep(1)
     st.rerun()
 
-# Limpeza e padronização das linhas fantasmas e strings vazias
+# Limpeza de linhas fantasmas da planilha
 df_escalacao = df_escalacao.dropna(how='all')
 if 'Turma' in df_escalacao.columns:
     df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
-
-for col in df_escalacao.columns:
-    col_limpa = str(col).strip().lower()
-    if col_limpa in ['aptidão defesa', 'assinatura orientador', 'email_orientador']:
-        df_escalacao[col] = df_escalacao[col].fillna('').astype(str).str.strip()
 
 # --- MAPEAMENTO DAS COLUNAS DA ESCALAÇÃO ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
@@ -189,26 +184,21 @@ if not df_escalacao.empty:
     if eh_orientador:
         possiveis = df_escalacao[df_escalacao[c_ori_email].astype(str).str.lower() == email_user].copy()
         linhas_pendentes = []
-        
-        # Uso de contador físico de linha para blindar a verificação de dados novos
-        for cont_linha in range(len(possiveis)):
-            row = possiveis.iloc[cont_linha]
+        for idx, row in possiveis.iterrows():
             turma_check = str(row[c_turma]).strip().upper() if c_turma else ""
             if "MCM V" in turma_check or "MCM 5" in turma_check or "TCC I" in turma_check or "TCC 1" in turma_check:
                 continue
                 
-            # CORREÇÃO FÍSICA DA ASSINATURA: Varre a célula atualizada sem depender de chaves de índice antigas
-            val_assinatura_real = str(row.get(c_assinatura_col, '')).strip()
-            banca_concluida = val_assinatura_real != "" and val_assinatura_real.lower() != "nan" and val_assinatura_real != "none"
+            alunos_grupo = obter_lista_alunos_linha(row)
             
-            if not banca_concluida:
-                alunos_grupo = obter_lista_alunos_linha(row)
-                df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
-                avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
-                alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
-                
+            # FILTRAGEM RESTAURADA ORIGINAL: Cruza os dados estritamente por e-mail e papel na aba Respostas
+            df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
+            avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
+            alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
+            
+            if alunos_restantes:
                 linhas_pendentes.append(row)
-                total_pendencias_contador += len(alunos_restantes) if alunos_restantes else 1
+                total_pendencias_contador += len(alunos_restantes)
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
     else:
@@ -229,7 +219,7 @@ if not df_escalacao.empty:
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
-# --- AMBIENTE VISUAL DO DOCENTE COM TRAVA DE SAÍDA EXIGIDA RESTAURADA ---
+# --- AMBIENTE VISUAL DO DOCENTE COM TRAVA DE SAÍDA RESTAURADA ---
 col_user, col_exit = st.columns([3, 1])
 with col_user:
     st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
@@ -243,7 +233,6 @@ with col_exit:
             st.query_params.clear()
             st.rerun()
 
-# EXIBIÇÃO DA TRAVA DE SEGURANÇA SE HOUVER INTEGRANTES SEM NOTA
 if st.session_state.get("tentou_sair_com_pendencia", False):
     st.warning(f"⚠️ **Atenção:** Ainda possui **{total_pendencias_contador}** avaliações pendentes registradas no seu nome!")
     col_cancela, col_confirma = st.columns(2)
@@ -403,7 +392,7 @@ else:
                         "Tema": (3, "Clareza tema."), "Resumo": (1, "Qualidade resumo."), "Introdução": (5, "Contextualização."),
                         "Justificativa": (5, "Relevância."), "Objetivos": (5, "Mensuráveis."), "Metodologia": (10, "Desenho estudo."),
                         "Referências": (1, "Normas."), "Apresentação Oral": (10, "Domínio."), "Coerência": (10, "Lógica interna."),
-                        "Qualidade Visual": (9, "Recursos."), "Tempo": (1, "Tempo regulamentar.")
+                        "Qualidade Visual": (9, "Slides."), "Tempo": (1, "Tempo regulamentar.")
                     }
                 elif "TCC II" in turma_bruta or "TCC 2" in turma_bruta or "MCM V" in turma_bruta or "MCM 5" in turma_bruta:
                     rubrica = {
@@ -418,14 +407,14 @@ else:
                 st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
                 
                 notas = {}
-                # CONTADOR ISOLADO PARA AS CHAVES DOS SLIDERS (Garante exibição e evita que sumam da tela)
-                cont_passo = 0
+                # CHAVE ESTÁVEL RESTAURADA: Chaves válidas e fixas geradas por e-mail e nome limpo do alvo avaliado
+                aluno_chave = str(aluno_alvo_final).replace(" ", "").replace(",", "")
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
                     valor_padrao = 0.0 if p == 1 else 0
                     
-                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"crivo_slider_nota_{email_user}_{cont_passo}")
-                    cont_passo += 1
+                    item_chave = str(item).replace(" ", "").replace("-", "").replace("/", "")
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_{item_chave}_{aluno_chave}")
 
                 total = sum(notas.values())
                 st.markdown(f"## Nota Atribuída: {total} / {v_max}")
