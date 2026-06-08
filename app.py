@@ -1,21 +1,20 @@
 import streamlit as st
+from google.oauth2 import service_account
 import gspread
-import base64
-import json
 
 st.title("Sistema Crivo")
 
+# Carrega as credenciais a partir das variáveis de ambiente (Secrets)
 try:
-    # Decodifica a string Base64 de volta para JSON
-    creds_b64 = st.secrets["GCP_CREDENTIALS_B64"]
-    creds_json = json.loads(base64.b64decode(creds_b64).decode('utf-8'))
+    # A variável 'gcp_service_account' deve estar configurada no seu Secrets
+    creds = service_account.Credentials.from_service_account_info(st.secrets["gcp_service_account"])
+    gc = gspread.authorize(creds)
     
-    # Conecta
-    gc = gspread.service_account_from_dict(creds_json)
-    sh = gc.open_by_url("SUA_URL_DA_PLANILHA_AQUI")
+    # Abre a planilha
+    sh = gc.open_by_url("SUA_URL_DA_PLANILHA")
+    worksheet = sh.worksheet("Escalacao")
     
     st.success("Conexão estabelecida!")
-    st.write("Dados lidos com sucesso.")
-    
+    st.write(worksheet.get_all_values())
 except Exception as e:
-    st.error(f"Erro: {e}")
+    st.error(f"Erro na conexão: {e}")
