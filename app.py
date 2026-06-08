@@ -9,7 +9,7 @@ import random
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
 
-# INJEÇÃO DE CSS ORIGINAL: Mantém visual profissional, botão azul clássico e esconde processamentos estruturais
+# INJEÇÃO DE CSS ORIGINAL: Mantém visual profissional, botão azul institucional e esconde logs técnicos
 st.markdown("""
     <style>
     header {visibility: hidden !important;}
@@ -33,7 +33,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Garante atualização imediata limpando cache residual do ambiente na inicialização
+# Limpa o cache residual do ambiente na inicialização para sincronizar os dados novos
 st.cache_data.clear()
 
 # 2. FUSO HORÁRIO DE BRASÍLIA
@@ -66,7 +66,7 @@ if df_escalacao.empty:
     time.sleep(1)
     st.rerun()
 
-# Limpeza de linhas fantasmas da planilha
+# Filtragem de segurança contra linhas em branco/fantasmas geradas por remoção manual
 df_escalacao = df_escalacao.dropna(how='all')
 if 'Turma' in df_escalacao.columns:
     df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
@@ -176,7 +176,7 @@ def obter_lista_alunos_linha(row):
                 lista.append(nome)
     return lista
 
-# --- PROCESSAMENTO SEGURO DE FILTRAGEM ---
+# --- FILTRAGEM DE PENDÊNCIAS RESTAURADA ---
 pendentes = pd.DataFrame()
 total_pendencias_contador = 0
 
@@ -191,10 +191,10 @@ if not df_escalacao.empty:
                 
             alunos_grupo = obter_lista_alunos_linha(row)
             
-            # Padronização matemática exata para ignorar conflitos de strings vazias ou nulas
+            # Conta as avaliações salvas cruzando o e-mail do orientador logado
             df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
-            avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().str.lower().tolist()
-            alunos_restantes = [a for a in alunos_grupo if str(a).strip().lower() not in avaliados]
+            avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
+            alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
             
             if alunos_restantes:
                 linhas_pendentes.append(row)
@@ -219,7 +219,7 @@ if not df_escalacao.empty:
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
-# --- AMBIENTE VISUAL DO DOCENTE COM TRAVA DE SAÍDA RESTAURADA ---
+# --- BOTÃO DE SAÍDA E TRAVA PREVENTIVA ORIGINAL ---
 col_user, col_exit = st.columns([3, 1])
 with col_user:
     st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
@@ -403,7 +403,7 @@ else:
                 st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
                 
                 notas = {}
-                # CHAVE DA ESTRUTURA BLINDADA: Garante a renderização usando chaves fixas baseadas no e-mail e critério limpo
+                # CHAVE ORIGINAL HIGIENIZADA COMPATÍVEL: Chave imutável baseada no e-mail logado e no rótulo do critério sem caracteres especiais
                 aluno_chave = str(aluno_alvo_final).replace(" ", "").replace(",", "")
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
