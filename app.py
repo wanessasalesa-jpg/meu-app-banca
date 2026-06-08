@@ -224,7 +224,7 @@ if not df_escalacao.empty:
             if ja_avaliou.empty and alunos_grupo:
                 linhas_pendentes.append(row)
                 total_pendencias_contador += 1
-        if líneas_pendentes:
+        if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
 col_user, col_exit = st.columns([3, 1])
@@ -363,7 +363,7 @@ else:
                         "Discente - Pontualidade e Compromisso": (3, "Pontualidade mantida."),
                         "Responsabilidade com a Aprendizagem": (3, "Responsabilidade evidente."),
                         "Artigo - Estruturação e Escrita Científica": (5, "Fluidez e concisão."),
-                        "Artigo - Fundamentação e Actualização Bibliográfica": (4, "Fundamentação crítica."),
+                        "Artigo - Fundamentação e Atualização Bibliográfica": (4, "Fundamentação crítica."),
                         "Artigo - Apresentação e Discussão dos Resultados": (4, "Discussão crítica."),
                         "Artigo - Rigor Metodológico": (4, "Métodos bem descritos."),
                         "Artigo - Conclusão e Relevância Científica": (3, "Conclusão clara.")
