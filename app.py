@@ -1,29 +1,21 @@
 import streamlit as st
-import pandas as pd
-from streamlit_gsheets import GSheetsConnection
+import subprocess
+import sys
 
-st.set_page_config(page_title="CRIVO - Gestão", layout="centered")
+# Tenta garantir que a biblioteca esteja instalada
+try:
+    from streamlit_gsheets import GSheetsConnection
+except ImportError:
+    st.write("Instalando dependências...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit-gsheets"])
+    from streamlit_gsheets import GSheetsConnection
 
-# CSS para o estilo que você gosta
-st.markdown("""
-    <style>
-    .stButton button {
-        width: 100%; border-radius: 10px; height: 3.5em;
-        background-color: #002147; color: white; font-weight: bold;
-    }
-    </style>
-""", unsafe_allow_html=True)
+st.title("Sistema Crivo - Conexão Final")
 
-st.title("🎓 CRIVO")
-
-# Conexão com a planilha (usando o Secrets que já configuramos)
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
     df = conn.read(worksheet="Escalacao", ttl=0)
-    
-    st.success("Conectado com sucesso!")
-    st.write("Dados da Escalacao carregados:")
+    st.success("Conexão estabelecida com sucesso!")
     st.dataframe(df.head())
-    
 except Exception as e:
-    st.error(f"Erro ao ler a planilha: {e}")
+    st.error(f"Erro na conexão: {e}")
