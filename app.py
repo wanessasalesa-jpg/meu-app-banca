@@ -52,11 +52,10 @@ if df_escalacao.empty:
     time.sleep(1)
     st.rerun()
 
-# Ajuste de strings nas colunas novas
-if 'Aptidão Defesa' in df_escalacao.columns:
-    df_escalacao['Aptidão Defesa'] = df_escalacao['Aptidão Defesa'].astype(str).replace('nan', '').str.strip()
-if 'Assinatura Orientador' in df_escalacao.columns:
-    df_escalacao['Assinatura Orientador'] = df_escalacao['Assinatura Orientador'].astype(str).replace('nan', '').str.strip()
+# Limpeza e padronização forçada das colunas da Escalação
+for col in df_escalacao.columns:
+    if str(col).strip().lower() in ['aptidão defesa', 'assinatura orientador']:
+        df_escalacao[col] = df_escalacao[col].astype(str).replace('nan', '').str.strip()
 
 # --- MAPEAMENTO DAS COLUNAS DA ESCALAÇÃO ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
@@ -184,7 +183,8 @@ if not df_escalacao.empty:
             if "MCM V" in turma_check or "MCM 5" in turma_check or "TCC I" in turma_check or "TCC 1" in turma_check:
                 continue
                 
-            val_assinatura_real = str(row.get(c_assinatura_col, '')).strip()
+            # CORREÇÃO CRUCIAL: Verificação direta e indexada na linha do Pandas DataFrame
+            val_assinatura_real = str(df_escalacao.loc[idx, c_assinatura_col]).strip() if c_assinatura_col else ""
             banca_concluida_na_planilha = val_assinatura_real != "" and val_assinatura_real.lower() != "nan"
             
             if not banca_concluida_na_planilha:
@@ -321,7 +321,7 @@ else:
                             except:
                                 st.error("Erro ao salvar. Tente novamente.")
 
-        # --- TELA 1: FORMULÁRIO DE NOTAS INDIVIDUAIS (SEM FRAGMENT) ---
+        # --- TELA 1: FORMULÁRIO DE NOTAS INDIVIDUAIS ---
         elif exibir_formulario_notas:
             rubrica = {}
             if eh_orientador:
@@ -367,7 +367,7 @@ else:
                         "Tema": (3, "Clareza tema."), "Resumo": (1, "Qualidade resumo."), "Introdução": (5, "Contextualização."),
                         "Justificativa": (5, "Relevância."), "Objetivos": (5, "Mensuráveis."), "Metodologia": (10, "Desenho estudo."),
                         "Referências": (1, "Normas."), "Apresentação Oral": (10, "Domínio."), "Coerência": (10, "Lógica interna."),
-                        "Qualidade Visual": (9, "Recursos."), "Tempo": (1, "Tempo regulamentar.")
+                        "Qualidade Visual": (9, "Organização slides."), "Tempo": (1, "Tempo regulamentar.")
                     }
                 elif "TCC II" in turma_bruta or "TCC 2" in turma_bruta or "MCM V" in turma_bruta or "MCM 5" in turma_bruta:
                     rubrica = {
@@ -409,7 +409,7 @@ else:
                             conn.update(worksheet="Respostas", data=df_f)
                             
                             st.success("✅ Avaliação gravada com sucesso!")
-                            time.sleep(1)
+                            time.sleep(0.5)
                             st.rerun()
                         except:
                             st.error("Erro na sincronização. Tente gravar novamente.")
