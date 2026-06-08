@@ -194,7 +194,7 @@ if not df_escalacao.empty:
             if "MCM V" in turma_check or "MCM 5" in turma_check or "TCC I" in turma_check or "TCC 1" in turma_check:
                 continue
                 
-            # RETORNO À LÓGICA ROBUSTA INDEXADA POR DATA FRAME (Resolve o bug de carregar tudo concluído)
+            # CORREÇÃO DA LEITURA INDEXADA DIRETAMENTE NO DATAFRAME
             val_assinatura_real = str(df_escalacao.loc[idx, c_assinatura_col]).strip() if c_assinatura_col else ""
             banca_concluida = val_assinatura_real != "" and val_assinatura_real.lower() != "nan" and val_assinatura_real != "none"
             
@@ -226,7 +226,7 @@ if not df_escalacao.empty:
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
-# --- AMBIENTE VISUAL DO DOCENTE COM TRAVA DE SAÍDA ORIGINÁRIA RESTAURADA ---
+# --- AMBIENTE VISUAL DO DOCENTE COM TRAVA DE SAÍDA RESTAURADA ---
 col_user, col_exit = st.columns([3, 1])
 with col_user:
     st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
@@ -415,14 +415,14 @@ else:
                 st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
                 
                 notas = {}
-                # FIXAÇÃO DO LOOP DE SLIDERS: Chaves geradas com índice numérico sequencial fixado por recarga (Evita o bloqueio visual do Streamlit)
-                idx_estatico = 0
+                # CORREÇÃO DA CHAVE COMPATÍVEL: Remove espaços e vírgulas usando chaves limpas para o loop do Streamlit
+                aluno_chave = str(aluno_alvo_final).replace(" ", "").replace(",", "")
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
                     valor_padrao = 0.0 if p == 1 else 0
                     
-                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"slider_estatico_crivo_{idx_estatico}")
-                    idx_estatico += 1
+                    item_chave = str(item).replace(" ", "").replace("-", "").replace("/", "")
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"sld_{item_chave}_{aluno_chave}")
 
                 total = sum(notas.values())
                 st.markdown(f"## Nota Atribuída: {total} / {v_max}")
