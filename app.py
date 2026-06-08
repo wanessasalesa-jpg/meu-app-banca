@@ -1,15 +1,14 @@
 import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
-from datetime import datetime, timedelta
+from datetime import datetime
 import time
 import pytz 
-import random
 
 # 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
 
-# INJEÇÃO DE CSS ORIGINAL: Mantém visual profissional, botão azul institucional e esconde logs técnicos
+# INJEÇÃO DE CSS ORIGINAL: Mantém visual profissional, botão azul clássico e esconde processamentos estruturais
 st.markdown("""
     <style>
     header {visibility: hidden !important;}
@@ -33,9 +32,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Limpa o cache residual do ambiente na inicialização para sincronizar os dados novos
-st.cache_data.clear()
-
 # 2. FUSO HORÁRIO DE BRASÍLIA
 fuso_bruta = pytz.timezone('America/Sao_Paulo')
 
@@ -50,26 +46,17 @@ def tratar_nome_curto(nome_completo):
         return f"{partes[0]} {partes[1]}"
     return partes[0]
 
-# 3. CONEXÃO COM GOOGLE SHEETS
+# 3. CONEXÃO COM GOOGLE SHEETS (NATIVA E SEGURA)
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def get_data_forced(aba):
-    try:
-        return conn.read(worksheet=aba, ttl=0, cache_id=str(random.randint(1, 100000)))
-    except:
-        return pd.DataFrame()
+# Leitura direta e sem loops infinitos para evitar o travamento de tela
+df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
 
-df_escalacao = get_data_forced("Escalacao")
-
-if df_escalacao.empty:
-    st.error("Conectando ao banco de dados... Por favor, aguarde um instante.")
-    time.sleep(1)
-    st.rerun()
-
-# Filtragem de segurança contra linhas em branco/fantasmas geradas por remoção manual
-df_escalacao = df_escalacao.dropna(how='all')
-if 'Turma' in df_escalacao.columns:
-    df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
+# Higienização de linhas em branco/fantasmas geradas por deleção manual
+if not df_escalacao.empty:
+    df_escalacao = df_escalacao.dropna(how='all')
+    if 'Turma' in df_escalacao.columns:
+        df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
 
 # --- MAPEAMENTO DAS COLUNAS DA ESCALAÇÃO ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
@@ -101,7 +88,7 @@ def verificar_presenca_email(email, coluna_real):
         return False
     return email in df_escalacao[coluna_real].astype(str).str.strip().str.lower().unique()
 
-df_respostas = get_data_forced("Respostas")
+df_respostas = conn.read(worksheet="Respostas", ttl=0)
 colunas_respostas_obrigatorias = ["Avaliador", "Email_Avaliador", "Alunos", "Nota_Final", "Papel", "Data_Hora"]
 if df_respostas.empty or not all(col in df_respostas.columns for col in colunas_respostas_obrigatorias):
     df_respostas = pd.DataFrame(columns=colunas_respostas_obrigatorias)
@@ -176,7 +163,7 @@ def obter_lista_alunos_linha(row):
                 lista.append(nome)
     return lista
 
-# --- FILTRAGEM DE PENDÊNCIAS RESTAURADA ---
+# --- FILTRAGEM MATEMÁTICA PURA DE PENDÊNCIAS ---
 pendentes = pd.DataFrame()
 total_pendencias_contador = 0
 
@@ -191,7 +178,7 @@ if not df_escalacao.empty:
                 
             alunos_grupo = obter_lista_alunos_linha(row)
             
-            # Conta as avaliações salvas cruzando o e-mail do orientador logado
+            # Conta as notas já salvas pelo orientador na aba Respostas
             df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
             avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
@@ -301,8 +288,7 @@ else:
                 else:
                     st.success("Todos os alunos deste grupo já foram avaliados!")
                     try:
-                        st.cache_data.clear()
-                        df_auto = conn.read(worksheet="Escalacao", ttl=0, cache_id=str(random.randint(1,999)))
+                        df_auto = conn.read(worksheet="Escalacao", ttl=0)
                         df_auto.loc[linha_index_planilha - 2, c_assinatura_col] = "CONCLUÍDO VIA APP"
                         conn.update(worksheet="Escalacao", data=df_auto)
                         st.session_state["grupo_selecionado"] = ""
@@ -329,8 +315,7 @@ else:
                     else:
                         with st.spinner("Gravando parecer..."):
                             try:
-                                st.cache_data.clear()
-                                df_atualizar_linha = conn.read(worksheet="Escalacao", ttl=0, cache_id=str(random.randint(1,999)))
+                                df_atualizar_linha = conn.read(worksheet="Escalacao", ttl=0)
                                 df_atualizar_linha.loc[linha_index_planilha - 2, c_aptidao_col] = str(resposta_aptidao)
                                 df_atualizar_linha.loc[linha_index_planilha - 2, c_assinatura_col] = str(assinatura_texto)
                                 conn.update(worksheet="Escalacao", data=df_atualizar_linha)
@@ -403,7 +388,7 @@ else:
                 st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
                 
                 notas = {}
-                # CHAVE ORIGINAL HIGIENIZADA COMPATÍVEL: Chave imutável baseada no e-mail logado e no rótulo do critério sem caracteres especiais
+                # CHAVE CHUMBADA FIXA POR ALUNO: Evita loops voláteis gerando os sliders sem falhas visuais
                 aluno_chave = str(aluno_alvo_final).replace(" ", "").replace(",", "")
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
@@ -418,8 +403,9 @@ else:
                 if st.button("🚀 GRAVAR AVALIAÇÃO NO SISTEMA", key="btn_gravar_definitivo_hoje"):
                     with st.spinner("Gravando notas..."):
                         try:
+                            # Limpa cache estritamente no momento do clique para forçar gravação limpa no Sheets
                             st.cache_data.clear()
-                            df_at = conn.read(worksheet="Respostas", ttl=0, cache_id=str(random.randint(1,999)))
+                            df_at = conn.read(worksheet="Respostas", ttl=0)
                             if df_at.empty or not all(col in df_at.columns for col in colunas_respostas_obrigatorias):
                                 df_at = pd.DataFrame(columns=colunas_respostas_obrigatorias)
                             
