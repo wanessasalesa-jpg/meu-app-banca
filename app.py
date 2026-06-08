@@ -49,7 +49,7 @@ def tratar_nome_curto(nome_completo):
 # 3. CONEXÃO NATIVA COM GOOGLE SHEETS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Leitura direta sem loops ou geradores aleatórios para evitar bloqueios de API
+# Leitura direta padrão do Streamlit (sem truques de IDs aleatórios)
 df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
 
 if df_escalacao.empty:
@@ -57,7 +57,7 @@ if df_escalacao.empty:
     time.sleep(1)
     st.rerun()
 
-# Limpeza segura de linhas vazias
+# Limpeza de linhas vazias
 df_escalacao = df_escalacao.dropna(how='all')
 if 'Turma' in df_escalacao.columns:
     df_escalacao = df_escalacao[df_escalacao['Turma'].astype(str).str.strip().replace('nan', '') != '']
@@ -77,9 +77,6 @@ c_turma = colunas_reais.get('turma')
 c_titulo = colunas_reais.get('titulo')
 c_data = colunas_reais.get('data')
 c_horario = colunas_reais.get('horario')
-
-c_aptidao_col = colunas_reais.get('aptidão defesa')
-c_assinatura_col = colunas_reais.get('assinatura orientador')
 
 c_aluno1 = colunas_reais.get('aluno_1')
 c_aluno2 = colunas_reais.get('aluno_2')
@@ -167,7 +164,7 @@ def obter_lista_alunos_linha(row):
                 lista.append(nome)
     return lista
 
-# --- FILTRAGEM MATEMÁTICA DE PENDÊNCIAS ---
+# --- FILTRAGEM MATEMÁTICA ORIGINAL DE PENDÊNCIAS ---
 pendentes = pd.DataFrame()
 total_pendencias_contador = 0
 
@@ -182,7 +179,7 @@ if not df_escalacao.empty:
                 
             alunos_grupo = obter_lista_alunos_linha(row)
             
-            # Filtro baseado exclusivamente no cruzamento de e-mail e papel na aba Respostas
+            # Cruza e-mail e papel na aba Respostas para listar pendências de alunos reais
             df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
             avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
@@ -196,7 +193,7 @@ if not df_escalacao.empty:
         cond_banca = pd.Series(False, index=df_escalacao.index)
         if c_av1_email: cond_banca |= (df_escalacao[c_av1_email].astype(str).str.lower() == email_user)
         if c_av2_email: cond_banca |= (df_escalacao[c_av2_email].astype(str).str.lower() == email_user)
-        if c_sup_email: cond_banca |= (df_escalacao[df_sup_email].astype(str).str.lower() == email_user) if c_sup_email else cond_banca
+        if c_sup_email: cond_banca |= (df_escalacao[c_sup_email].astype(str).str.lower() == email_user)
             
         possiveis = df_escalacao[cond_banca].copy()
         linhas_pendentes = []
@@ -276,7 +273,6 @@ else:
 
         aluno_alvo_final = string_grupo_completo
         exibir_formulario_notas = True
-        exibir_tela_aptidao_final = False
 
         if eh_orientador:
             df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
@@ -287,52 +283,10 @@ else:
                 aluno_alvo_final = st.selectbox("👤 Selecione o Aluno para atribuir a nota individual:", lista_alunos_individuais)
             else:
                 exibir_formulario_notas = False
-                if "TCC II" in turma_bruta or "TCC 2" in turma_bruta:
-                    exibir_tela_aptidao_final = True
-                else:
-                    st.success("Todos os alunos deste grupo já foram avaliados!")
-                    try:
-                        df_auto = conn.read(worksheet="Escalacao", ttl=0)
-                        df_auto.loc[linha_index_planilha - 2, c_assinatura_col] = "CONCLUÍDO VIA APP"
-                        conn.update(worksheet="Escalacao", data=df_auto)
-                        st.session_state["grupo_selecionado"] = ""
-                        time.sleep(0.5)
-                        st.rerun()
-                    except:
-                        pass
-
-        # --- TELA 2: FICHA DE APTIDÃO ---
-        if eh_orientador and exibir_tela_aptidao_final:
-            st.markdown("---")
-            st.subheader("📋 TELA 2: Ficha de Aptidão de Defesa (Exclusivo TCC II)")
-            
-            with st.form("form_aptidao_tcc2"):
-                resposta_aptidao = st.radio(
-                    "**O projeto de Trabalho de Conclusão de Curso (TCC II) entregue pelo grupo encontra-se:**",
-                    ["", "APTO para apresentação", "INAPTO para apresentação"], index=0
-                )
-                assinatura_texto = st.text_input("**Assinatura Digital (Digite seu Nome Completo para assinar):**").strip()
-                
-                if st.form_submit_button("🚀 ENVIAR PARECER E CONCLUIR BANCA"):
-                    if resposta_aptidao == "" or assinatura_texto == "":
-                        st.error("Preencha todos os campos obrigatórios.")
-                    else:
-                        with st.spinner("Gravando parecer..."):
-                            try:
-                                df_atualizar_linha = conn.read(worksheet="Escalacao", ttl=0)
-                                df_atualizar_linha.loc[linha_index_planilha - 2, c_aptidao_col] = str(resposta_aptidao)
-                                df_atualizar_linha.loc[linha_index_planilha - 2, c_assinatura_col] = str(assinatura_texto)
-                                conn.update(worksheet="Escalacao", data=df_atualizar_linha)
-                                st.balloons()
-                                st.success("🎉 Concluído com sucesso!")
-                                st.session_state["grupo_selecionado"] = ""
-                                time.sleep(1)
-                                st.rerun()
-                            except:
-                                st.error("Erro ao salvar. Tente novamente.")
+                st.success("Todos os alunos deste grupo já foram avaliados!")
 
         # --- TELA 1: FORMULÁRIO DE NOTAS INDIVIDUAIS ---
-        elif exibir_formulario_notas:
+        if exibir_formulario_notas:
             rubrica = {}
             if eh_orientador:
                 st.info(f"🌱 Avaliando individualmente o discente: **{aluno_alvo_final}**")
@@ -391,7 +345,7 @@ else:
                 st.write(f"### 📝 Critérios")
                 
                 notas = {}
-                # PADRÃO OURO DE CHAVE: Usa estritamente o e-mail logado combinado com o índice posicional estável da rubrica
+                # CHAVE ORIGINAL HIGIENIZADA COMPATÍVEL
                 cont_idx = 0
                 for item, (p, help_t) in rubrica.items():
                     passo_slider = 0.5 if p == 1 else 1
