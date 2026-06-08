@@ -26,11 +26,12 @@ def tratar_nome_curto(nome_completo):
 # 3. CONEXÃO COM GOOGLE SHEETS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def get_data(aba, ttl_sec=2):
+def get_data(aba, ttl_sec=0):
     return conn.read(worksheet=aba, ttl=ttl_sec)
 
 try:
-    df_escalacao = get_data("Escalacao", ttl_sec=300)
+    # AJUSTE DE FLUXO: ttl_sec zerado para atualização imediata ao apagar ou editar dados na planilha
+    df_escalacao = get_data("Escalacao", ttl_sec=0)
     if 'Aptidão Defesa' in df_escalacao.columns:
         df_escalacao['Aptidão Defesa'] = df_escalacao['Aptidão Defesa'].astype(str).replace('nan', '')
     if 'Assinatura Orientador' in df_escalacao.columns:
@@ -219,7 +220,7 @@ if not df_escalacao.empty:
                 continue
                 
             alunos_grupo = obter_lista_alunos_linha(row)
-            avaliados = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Orientador")]["Alunos"].tolist()
+            avaliados = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Paper"] == "Orientador")]["Alunos"].tolist()
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
             
             val_apt = row.get(c_aptidao_col)
@@ -236,7 +237,7 @@ if not df_escalacao.empty:
         if c_av1_email:
             cond_banca |= (df_escalacao[c_av1_email].astype(str).str.lower() == email_user)
         if c_av2_email:
-            cond_banca |= (df_escalacao[c_av2_email].astype(str).str.lower() == email_user)
+            cond_banca |= (df_escalacao[df_escalacao[c_av2_email].astype(str).str.lower() == email_user])
         if c_sup_email:
             cond_banca |= (df_escalacao[c_sup_email].astype(str).str.lower() == email_user)
             
@@ -400,7 +401,7 @@ else:
                                     st.balloons()
                                     st.success("🎉 Ficha de Aptidão registrada com sucesso! Lote concluído.")
                                     st.session_state["grupo_selecionado"] = ""
-                                    time.sleep(1.5)
+                                    time.sleep(0.5)
                                     st.rerun()
                                 except Exception as e:
                                     st.error(f"Erro ao salvar: {e}")
@@ -521,10 +522,10 @@ else:
                                     conn.update(worksheet="Respostas", data=df_f)
                                     
                                     st.success("✅ Avaliação gravada com sucesso!")
-                                    time.sleep(1)
+                                    time.sleep(0.5)
                                     st.rerun()
                                 except:
-                                    time.sleep(1)
+                                    time.sleep(0.5)
                                     st.rerun()
 
                 formulario_avaliacao(aluno_alvo_final)
