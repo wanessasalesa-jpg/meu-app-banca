@@ -5,17 +5,16 @@ from datetime import datetime, timedelta
 import time
 import pytz 
 
-# 1. CONFIGURAÇÃO DA PÁGINA (Ajustes visuais prioritários para evitar flickering)
+# 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="CRIVO - Gestão Acadêmica", layout="centered")
 
-# INJEÇÃO IMEDIATA DE CSS: Primeira ação do script para blindar a tela antes de qualquer processamento
+# INJEÇÃO IMEDIATA DE CSS PARA EVITAR VISUALIZAÇÃO DE CÓDIGOS EM PROCESSAMENTO
 st.markdown("""
     <style>
     header {visibility: hidden !important;}
     #MainMenu {visibility: hidden !important;}
     footer {visibility: hidden;}
     
-    /* Oculta absolutamente qualquer dump de código, blocos de erro ou tracebacks nativos */
     .stException, .stDetails, div[data-testid="stNotification"] code, pre, code {
         display: none !important;
         visibility: hidden !important;
@@ -29,7 +28,6 @@ fuso_bruta = pytz.timezone('America/Sao_Paulo')
 def obter_agora():
     return datetime.now(fuso_bruta)
 
-# FUNÇÃO PARA ENCURTAR NOMES NA EXIBIÇÃO DO APP
 def tratar_nome_curto(nome_completo):
     if not nome_completo or pd.isna(nome_completo):
         return ""
@@ -41,29 +39,26 @@ def tratar_nome_curto(nome_completo):
 # 3. CONEXÃO COM GOOGLE SHEETS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def get_data(aba, ttl_sec=0):
+def get_data(aba):
     try:
-        return conn.read(worksheet=aba, ttl=ttl_sec)
+        return conn.read(worksheet=aba, ttl=0)
     except:
         return pd.DataFrame()
 
-# Container seguro para isolar mensagens de carregamento de banco de dados
-msg_container = st.empty()
+df_escalacao = get_data("Escalacao")
 
-try:
-    df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
-    if 'Aptidão Defesa' in df_escalacao.columns:
-        df_escalacao['Aptidão Defesa'] = df_escalacao['Aptidão Defesa'].astype(str).replace('nan', '').str.strip()
-    if 'Assinatura Orientador' in df_escalacao.columns:
-        df_escalacao['Assinatura Orientador'] = df_escalacao['Assinatura Orientador'].astype(str).replace('nan', '').str.strip()
-except:
-    msg_container.error("Carregando ambiente seguro... Por favor, aguarde um instante.")
+if df_escalacao.empty:
+    st.error("Conectando ao banco de dados... Por favor, aguarde um instante.")
     time.sleep(1)
     st.rerun()
 
-msg_container.empty() # Limpa o container de carregamento de forma invisível
+# Ajuste de strings nas colunas novas
+if 'Aptidão Defesa' in df_escalacao.columns:
+    df_escalacao['Aptidão Defesa'] = df_escalacao['Aptidão Defesa'].astype(str).replace('nan', '').str.strip()
+if 'Assinatura Orientador' in df_escalacao.columns:
+    df_escalacao['Assinatura Orientador'] = df_escalacao['Assinatura Orientador'].astype(str).replace('nan', '').str.strip()
 
-# --- MAPEAMENTO CASE-INSENSITIVE DAS COLUNAS DA ESCALAÇÃO ---
+# --- MAPEAMENTO DAS COLUNAS DA ESCALAÇÃO ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
 
 c_av1_email = colunas_reais.get('email_avaliador_1')
@@ -82,96 +77,61 @@ c_horario = colunas_reais.get('horario')
 c_aptidao_col = colunas_reais.get('aptidão defesa')
 c_assinatura_col = colunas_reais.get('assinatura orientador')
 
-# MAPEAMENTO DAS COLUNAS SEPARADAS DE ALUNOS
 c_aluno1 = colunas_reais.get('aluno_1')
 c_aluno2 = colunas_reais.get('aluno_2')
 c_aluno3 = colunas_reais.get('aluno_3')
 c_aluno4 = colunas_reais.get('aluno_4')
 c_aluno5 = colunas_reais.get('aluno_5')
 
-# FUNÇÃO AUXILIAR PARA CHECAR SE O EMAIL EXISTE NA COLUNA MAPEADA
 def verificar_presenca_email(email, coluna_real):
     if not coluna_real or df_escalacao.empty:
         return False
     return email in df_escalacao[coluna_real].astype(str).str.strip().str.lower().unique()
 
-# --- TRATAMENTO SEGURO DA ABA DE RESPOSTAS ---
+df_respostas = get_data("Respostas")
 colunas_respostas_obrigatorias = ["Avaliador", "Email_Avaliador", "Alunos", "Nota_Final", "Papel", "Data_Hora"]
-try:
-    df_respostas = get_data("Respostas", ttl_sec=0)
-    if df_respostas.empty or not all(col in df_respostas.columns for col in colunas_respostas_obrigatorias):
-        df_respostas = pd.DataFrame(columns=colunas_respostas_obrigatorias)
-except:
+if df_respostas.empty or not all(col in df_respostas.columns for col in colunas_respostas_obrigatorias):
     df_respostas = pd.DataFrame(columns=colunas_respostas_obrigatorias)
 
-# --- TRAVA DE LOGOUT E IDENTIFICAÇÃO DE PAPEL ---
+# --- LOGIN E LOGOUT ---
 if 'email' not in st.session_state:
     if "user" in st.query_params:
         st.session_state.email = st.query_params["user"]
 
 if 'email' not in st.session_state:
-    st.markdown("""
-        <style>
-        .stButton button {
-            width: 100% !important;
-            border-radius: 10px !important;
-            height: 3.5em !important;
-            background-color: #002147 !important;
-            color: white !important;
-            font-weight: bold !important;
-            border: none !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
     st.title("🎓 CRIVO")
     st.subheader("Sistema de Gestão de Bancas Acadêmicas")
     st.caption("© 2026 Desenvolvido por Wanessa Sales de Almeida")
     st.divider()
-
     st.write("### Identificação do Docente")
     email_raw = st.text_input("Digite seu e-mail cadastrado:").strip()
     if st.button("Acessar Sistema"):
         if email_raw:
             email_limpo = email_raw.lower()
-            
-            id_banca1 = verificar_presenca_email(email_limpo, c_av1_email)
-            id_banca2 = verificar_presenca_email(email_limpo, c_av2_email)
-            id_suplente = verificar_presenca_email(email_limpo, c_sup_email)
-            id_orienta = verificar_presenca_email(email_limpo, c_ori_email)
-            
-            if id_banca1 or id_banca2 or id_suplente or id_orienta:
+            if verificar_presenca_email(email_limpo, c_av1_email) or verificar_presenca_email(email_limpo, c_av2_email) or verificar_presenca_email(email_limpo, c_sup_email) or verificar_presenca_email(email_limpo, c_ori_email):
                 st.session_state.email = email_limpo
                 st.query_params["user"] = email_limpo
                 st.rerun()
             else:
-                st.error("E-mail não autorizado ou não encontrado na escalação.")
+                st.error("E-mail não autorizado ou não encontrado.")
     st.stop()
 
-# --- DEFINIÇÃO DO PAPEL LOGADO ---
 email_user = st.session_state.email
 eh_orientador = False
-eh_banca = False
 nome_completo_docente = ""
 
 if verificar_presenca_email(email_user, c_ori_email):
     eh_orientador = True
     nome_completo_docente = df_escalacao[df_escalacao[c_ori_email].astype(str).str.lower() == email_user][c_ori_nome].iloc[0]
 elif verificar_presenca_email(email_user, c_av1_email):
-    eh_banca = True
     nome_completo_docente = df_escalacao[df_escalacao[c_av1_email].astype(str).str.lower() == email_user][c_av1_nome].iloc[0]
 elif verificar_presenca_email(email_user, c_av2_email):
-    eh_banca = True
     nome_completo_docente = df_escalacao[df_escalacao[c_av2_email].astype(str).str.lower() == email_user][c_av2_nome].iloc[0]
 elif verificar_presenca_email(email_user, c_sup_email):
-    eh_banca = True
     nome_completo_docente = df_escalacao[df_escalacao[c_sup_email].astype(str).str.lower() == email_user][c_sup_nome].iloc[0]
 
 nome_exibicao = tratar_nome_curto(nome_completo_docente)
-
-# --- DEFINIÇÃO DINÂMICA DE CORES ENVOLVENTES ---
 cor_primaria = "#002147" if not eh_orientador else "#FF1493"
-cor_texto_bloco = "#ffffff"
 
 st.markdown(f"""
     <style>
@@ -179,16 +139,9 @@ st.markdown(f"""
         background-color: {cor_primaria} !important;
         padding: 25px !important;
         border-radius: 12px !important;
-        color: {cor_texto_bloco} !important;
+        color: white !important;
         margin-bottom: 25px !important;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.1) !important;
     }}
-    .bloco-cabecalho h1, .bloco-cabecalho h3, .bloco-cabecalho p {{
-        color: {cor_texto_bloco} !important;
-        margin: 0 !important;
-        padding: 2px 0 !important;
-    }}
-    
     .stButton button {{
         width: 100% !important;
         border-radius: 10px !important;
@@ -196,7 +149,6 @@ st.markdown(f"""
         background-color: {cor_primaria} !important;
         color: white !important;
         font-weight: bold !important;
-        border: none !important;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -210,7 +162,6 @@ st.markdown(f"""
     </div>
     """, unsafe_allow_html=True)
 
-# FUNÇÃO AUXILIAR PARA MONTAR A LISTA DE ALUNOS REAL DE UMA LINHA DA ESCALAÇÃO
 def obter_lista_alunos_linha(row):
     lista = []
     for col_aluno in [c_aluno1, c_aluno2, c_aluno3, c_aluno4, c_aluno5]:
@@ -220,7 +171,7 @@ def obter_lista_alunos_linha(row):
                 lista.append(nome)
     return lista
 
-# --- FILTRAGEM DE GRUPOS PENDENTES EM TEMPO REAL ---
+# --- PROCESSAMENTO DE FILTRAGEM ---
 pendentes = pd.DataFrame()
 total_pendencias_contador = 0
 
@@ -230,7 +181,6 @@ if not df_escalacao.empty:
         linhas_pendentes = []
         for idx, row in possiveis.iterrows():
             turma_check = str(row[c_turma]).strip().upper() if c_turma else ""
-            
             if "MCM V" in turma_check or "MCM 5" in turma_check or "TCC I" in turma_check or "TCC 1" in turma_check:
                 continue
                 
@@ -238,31 +188,26 @@ if not df_escalacao.empty:
             banca_concluida_na_planilha = val_assinatura_real != "" and val_assinatura_real.lower() != "nan"
             
             if not banca_concluida_na_planilha:
-                linhas_pendentes.append(row)
                 alunos_grupo = obter_lista_alunos_linha(row)
-                
                 df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
                 avaliados = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
                 alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
                 
+                linhas_pendentes.append(row)
                 total_pendencias_contador += len(alunos_restantes) if alunos_restantes else 1
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
     else:
         cond_banca = pd.Series(False, index=df_escalacao.index)
-        if c_av1_email:
-            cond_banca |= (df_escalacao[c_av1_email].astype(str).str.lower() == email_user)
-        if c_av2_email:
-            cond_banca |= (df_escalacao[c_av2_email].astype(str).str.lower() == email_user)
-        if c_sup_email:
-            cond_banca |= (df_escalacao[c_sup_email].astype(str).str.lower() == email_user)
+        if c_av1_email: cond_banca |= (df_escalacao[c_av1_email].astype(str).str.lower() == email_user)
+        if c_av2_email: cond_banca |= (df_escalacao[c_av2_email].astype(str).str.lower() == email_user)
+        if c_sup_email: cond_banca |= (df_escalacao[c_sup_email].astype(str).str.lower() == email_user)
             
         possiveis = df_escalacao[cond_banca].copy()
         linhas_pendentes = []
         for idx, row in possiveis.iterrows():
             alunos_grupo = obter_lista_alunos_linha(row)
             string_grupo_banca = ", ".join(alunos_grupo)
-            
             ja_avaliou = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Banca") & (df_respostas["Alunos"].astype(str).str.strip() == string_grupo_banca.strip())]
             if ja_avaliou.empty and alunos_grupo:
                 linhas_pendentes.append(row)
@@ -270,32 +215,14 @@ if not df_escalacao.empty:
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
-# --- AMBIENTE VISUAL DO DOCENTE ---
 col_user, col_exit = st.columns([3, 1])
 with col_user:
     st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
 with col_exit:
     if st.button("Sair"):
-        if total_pendencias_contador > 0:
-            st.session_state.tentou_sair_com_pendencia = True
-        else:
-            st.session_state.clear()
-            st.query_params.clear()
-            st.rerun()
-
-if st.session_state.get("tentou_sair_com_pendencia", False):
-    st.warning(f"⚠️ **Atenção:** Ainda possui **{total_pendencias_contador}** avaliações pendentes registadas no seu nome!")
-    col_cancela, col_confirma = st.columns(2)
-    with col_cancela:
-        if st.button("🔄 Voltar e Avaliar"):
-            st.session_state.tentou_sair_com_pendencia = False
-            st.rerun()
-    with col_confirma:
-        if st.button("🏃 Sair Mesmo Assim"):
-            st.session_state.clear()
-            st.query_params.clear()
-            st.rerun()
-    st.stop()
+        st.session_state.clear()
+        st.query_params.clear()
+        st.rerun()
 
 if pendentes.empty:
     st.balloons()
@@ -317,11 +244,7 @@ else:
     if st.session_state["grupo_selecionado"] in lista_grupos_display:
         idx_selecao = lista_grupos_display.index(st.session_state["grupo_selecionado"]) + 1
 
-    selecionado_display = st.selectbox(
-        "🎯 Escolha o Grupo para Avaliar:", 
-        [""] + lista_grupos_display, 
-        index=idx_selecao
-    )
+    selecionado_display = st.selectbox("🎯 Escolha o Grupo para Avaliar:", [""] + lista_grupos_display, index=idx_selecao)
     st.session_state["grupo_selecionado"] = selecionado_display
 
     if selecionado_display and selecionado_display != "":
@@ -329,238 +252,164 @@ else:
         turma_bruta = str(dados[c_turma]).strip().upper() if c_turma else ""
         alunos_reais_lista = obter_lista_alunos_linha(dados)
         string_grupo_completo = ", ".join(alunos_reais_lista)
-        
         linha_index_planilha = dados.name + 2 
-        banca_liberada = True
-        msg_trava = ""
-        
-        if not eh_orientador:
-            try:
-                val_data = str(dados[c_data]).strip() if c_data else ""
-                val_horario = str(dados[c_horario]).strip() if c_horario else ""
-                data_banca = datetime.strptime(val_data, "%d/%m/%Y").date()
-                horario_banca = datetime.strptime(val_horario, "%H:%M").time()
-                dt_banca_completa = fuso_bruta.localize(datetime.combine(data_banca, horario_banca))
-                
-                agora = obter_agora()
-                limite_liberacao = dt_banca_completa - timedelta(minutes=5)
-                
-                if agora < limite_liberacao:
-                    banca_liberada = False
-                    msg_trava = f"⏳ Esta avaliação de Banca só estará disponível a partir das {limite_liberacao.strftime('%H:%M')} do dia {data_banca.strftime('%d/%m/%Y')}."
-            except:
-                pass
 
         with st.expander("📖 Informações do Trabalho", expanded=True):
             st.write(f"**Turma:** {turma_bruta}")
             st.write(f"**Título:** {dados[c_titulo] if c_titulo else ''}")
             st.write(f"**Orientador:** {tratar_nome_curto(dados[c_ori_nome]) if c_ori_nome else ''}")
             st.write(f"**Integrantes do Grupo:** {string_grupo_completo}")
-            st.write(f"**Data/Horário Cadastrado:** {dados[c_data] if c_data else ''} às {dados[c_horario] if c_horario else ''}")
 
-        if not banca_liberada:
-            st.warning(msg_trava)
-        else:
-            aluno_alvo_final = string_grupo_completo
-            exibir_formulario_notas = True
-            exibir_tela_aptidao_final = False
+        aluno_alvo_final = string_grupo_completo
+        exibir_formulario_notas = True
+        exibir_tela_aptidao_final = False
 
-            if eh_orientador:
-                df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
-                avaliados_na_aba = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
-                lista_alunos_individuais = [a for a in alunos_reais_lista if a not in avaliados_na_aba]
-                
-                if lista_alunos_individuais:
-                    aluno_alvo_final = st.selectbox("👤 Selecione o Aluno para atribuir a nota individual:", lista_alunos_individuais)
+        if eh_orientador:
+            df_filtrado_user = df_respostas[(df_respostas["Email_Avaliador"].astype(str).str.lower() == email_user) & (df_respostas["Papel"] == "Orientador")]
+            avaliados_na_aba = df_filtrado_user["Alunos"].astype(str).str.strip().tolist()
+            lista_alunos_individuais = [a for a in alunos_reais_lista if a not in avaliados_na_aba]
+            
+            if lista_alunos_individuais:
+                aluno_alvo_final = st.selectbox("👤 Selecione o Aluno para atribuir a nota individual:", lista_alunos_individuais)
+            else:
+                exibir_formulario_notas = False
+                if "TCC II" in turma_bruta or "TCC 2" in turma_bruta:
+                    exibir_tela_aptidao_final = True
                 else:
-                    exibir_formulario_notas = False
-                    if "TCC II" in turma_bruta or "TCC 2" in turma_bruta:
-                        exibir_tela_aptidao_final = True
+                    st.success("Todos os alunos deste grupo já foram avaliados!")
+                    try:
+                        df_auto = conn.read(worksheet="Escalacao", ttl=0)
+                        df_auto.loc[linha_index_planilha - 2, c_assinatura_col] = "CONCLUÍDO VIA APP"
+                        conn.update(worksheet="Escalacao", data=df_auto)
+                        st.session_state["grupo_selecionado"] = ""
+                        time.sleep(0.5)
+                        st.rerun()
+                    except:
+                        pass
+
+        # --- TELA 2: FICHA DE APTIDÃO ---
+        if eh_orientador and exibir_tela_aptidao_final:
+            st.markdown("---")
+            st.subheader("📋 TELA 2: Ficha de Aptidão de Defesa (Exclusivo TCC II)")
+            
+            with st.form("form_aptidao_tcc2"):
+                resposta_aptidao = st.radio(
+                    "**O projeto de Trabalho de Conclusão de Curso (TCC II) entregue pelo grupo encontra-se:**",
+                    ["", "APTO para apresentação", "INAPTO para apresentação"], index=0
+                )
+                assinatura_texto = st.text_input("**Assinatura Digital (Digite seu Nome Completo para assinar):**").strip()
+                
+                if st.form_submit_button("🚀 ENVIAR PARECER E CONCLUIR BANCA"):
+                    if resposta_aptidao == "" or assinatura_texto == "":
+                        st.error("Preencha todos os campos obrigatórios.")
                     else:
-                        st.success("Todos os alunos deste grupo já foram avaliados por si!")
+                        with st.spinner("Gravando parecer..."):
+                            try:
+                                df_atualizar_linha = conn.read(worksheet="Escalacao", ttl=0)
+                                df_atualizar_linha[c_aptidao_col] = df_atualizar_linha[c_aptidao_col].astype(str).replace('nan', '')
+                                df_atualizar_linha[c_assinatura_col] = df_atualizar_linha[c_assinatura_col].astype(str).replace('nan', '')
+                                
+                                df_atualizar_linha.loc[linha_index_planilha - 2, c_aptidao_col] = str(resposta_aptidao)
+                                df_atualizar_linha.loc[linha_index_planilha - 2, c_assinatura_col] = str(assinatura_texto)
+                                
+                                conn.update(worksheet="Escalacao", data=df_atualizar_linha)
+                                st.balloons()
+                                st.success("🎉 Concluído com sucesso!")
+                                st.session_state["grupo_selecionado"] = ""
+                                time.sleep(1)
+                                st.rerun()
+                            except:
+                                st.error("Erro ao salvar. Tente novamente.")
+
+        # --- TELA 1: FORMULÁRIO DE NOTAS INDIVIDUAIS (SEM FRAGMENT) ---
+        elif exibir_formulario_notas:
+            rubrica = {}
+            if eh_orientador:
+                st.info(f"🌱 Avaliando individualmente o discente: **{aluno_alvo_final}**")
+                if "MCM IV" in turma_bruta or "MCM 4" in turma_bruta:
+                    rubrica = {
+                        "Desenv. - Envolvimento e Responsabilidade": (5, "Participação proativa."),
+                        "Desenv. - Relação com Orientador / Diálogo": (5, "Relação colaborativa."),
+                        "Desenv. - Desempenho e Cumprimento de Tarefas": (5, "Desempenho satisfatório."),
+                        "Desenv. - Pontualidade e Compromisso": (5, "Pontualidade mantida."),
+                        "Responsabilidade com a Aprendizagem": (5, "Responsabilidade evidente."),
+                        "Texto - Justificativa do Estudo": (6, "Clareza na relevância."),
+                        "Texto - Objetivo Geral e Específicos": (6, "Objetivos bem formulados."),
+                        "Texto - Fundamentação Teórica / Referências": (6, "Referencial teórico relevante."),
+                        "Texto - Metodologia Proposta": (6, "Método bem descrito."),
+                        "Texto - Cronograma de Execução": (3, "Cronograma estruturado."),
+                        "Texto - Estrutura, Linguagem e Formatação": (3, "Segue as normas."),
+                        "Relatório - Relatório de Pesquisa": (10, "Apreciação técnica final.")
+                    }
+                elif "TCC II" in turma_bruta or "TCC 2" in turma_bruta:
+                    rubrica = {
+                        "Discente - Envolvimento e Responsabilidade": (5, "Participação proativa."),
+                        "Discente - Relação com Orientador / Diálogo": (5, "Relação colaborativa."),
+                        "Discente - Desempenho / Cumprimento de Tarefas": (4, "Desempenho satisfatório."),
+                        "Discente - Pontualidade e Compromisso": (3, "Pontualidade mantida."),
+                        "Responsabilidade com a Aprendizagem": (3, "Responsabilidade evidente."),
+                        "Artigo - Estruturação e Escrita Científica": (5, "Fluidez e concisão."),
+                        "Artigo - Fundamentação e Atualização Bibliográfica": (4, "Fundamentação crítica."),
+                        "Artigo - Apresentação e Discussão dos Resultados": (4, "Discussão crítica."),
+                        "Artigo - Rigor Metodológico": (4, "Métodos bem descritos."),
+                        "Artigo - Conclusão e Relevância Científica": (3, "Conclusão clara.")
+                    }
+            else:
+                st.info("🎓 Rubrica de Avaliação da Banca (Nota para o Grupo todo).")
+                if "MCM IV" in turma_bruta or "MCM 4" in turma_bruta:
+                    rubrica = {
+                        "Delineamento - Rigor Científico e Metodologia": (10, "Procedimentos propostos."),
+                        "Apresentação Oral - Clareza e Domínio": (10, "Domínio conceitual."),
+                        "Coerência - Estrutura Geral do Projeto": (10, "Lógica interna.")
+                    }
+                elif "TCC I" in turma_bruta or "TCC 1" in turma_bruta:
+                    rubrica = {
+                        "Tema": (3, "Clareza tema."), "Resumo": (1, "Qualidade resumo."), "Introdução": (5, "Contextualização."),
+                        "Justificativa": (5, "Relevância."), "Objetivos": (5, "Mensuráveis."), "Metodologia": (10, "Desenho estudo."),
+                        "Referências": (1, "Normas."), "Apresentação Oral": (10, "Domínio."), "Coerência": (10, "Lógica interna."),
+                        "Qualidade Visual": (9, "Recursos."), "Tempo": (1, "Tempo regulamentar.")
+                    }
+                elif "TCC II" in turma_bruta or "TCC 2" in turma_bruta or "MCM V" in turma_bruta or "MCM 5" in turma_bruta:
+                    rubrica = {
+                        "Tema/Resumo": (4, "Qualidade técnica."), "Introdução": (5, "Fundamentação."), "Metodologia": (5, "Execução método."),
+                        "Resultados": (5, "Clareza dados."), "Discussão": (10, "Capacidade crítica."), "Referências": (1, "Rigor técnico."),
+                        "Apresentação Oral": (10, "Segurança."), "Coerência": (10, "União lógica."), "Qualidade Visual": (9, "Slides."),
+                        "Tempo": (1, "Tempo regulamentar.")
+                    }
+
+            if rubrica:
+                v_max = sum(p for p, h in rubrica.values())
+                st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
+                
+                notas = {}
+                for item, (p, help_t) in rubrica.items():
+                    passo_slider = 0.5 if p == 1 else 1
+                    valor_padrao = 0.0 if p == 1 else 0
+                    notas[item] = st.slider(f"**{item} ({p} pts)**", min_value=valor_padrao, max_value=float(p), value=valor_padrao, step=passo_slider, key=f"s_{item}_{aluno_alvo_final}")
+
+                total = sum(notas.values())
+                st.markdown(f"## Nota Atribuída: {total} / {v_max}")
+
+                if st.button("🚀 GRAVAR AVALIAÇÃO NO SISTEMA", key=f"btn_save_{aluno_alvo_final}"):
+                    with st.spinner("Gravando notas..."):
                         try:
-                            df_auto = conn.read(worksheet="Escalacao", ttl=0)
-                            df_auto.loc[linha_index_planilha - 2, c_assinatura_col] = "CONCLUÍDO VIA APP"
-                            conn.update(worksheet="Escalacao", data=df_auto)
-                            st.session_state["grupo_selecionado"] = ""
-                            time.sleep(0.5)
+                            df_at = conn.read(worksheet="Respostas", ttl=0)
+                            if df_at.empty or not all(col in df_at.columns for col in colunas_respostas_obrigatorias):
+                                df_at = pd.DataFrame(columns=colunas_respostas_obrigatorias)
+                            
+                            nova_l = pd.DataFrame([{
+                                "Avaliador": nome_completo_docente, 
+                                "Email_Avaliador": email_user, 
+                                "Alunos": aluno_alvo_final, 
+                                "Nota_Final": total, 
+                                "Papel": "Orientador" if eh_orientador else "Banca",
+                                "Data_Hora": obter_agora().strftime("%d/%m/%Y %H:%M")
+                            }])
+                            df_f = pd.concat([df_at, nova_l], ignore_index=True)
+                            conn.update(worksheet="Respostas", data=df_f)
+                            
+                            st.success("✅ Avaliação gravada com sucesso!")
+                            time.sleep(1)
                             st.rerun()
                         except:
-                            pass
-
-            # --- TELA 2: FICHA DE APTIDÃO (EXCLUSIVO TCC II) ---
-            if eh_orientador and exibir_tela_aptidao_final:
-                st.markdown("---")
-                st.subheader("📋 TELA 2: Ficha de Aptidão de Defesa (Exclusivo TCC II)")
-                st.info("Parabéns! As avaliações individuais dos alunos foram concluídas. Agora, preencha o parecer de aptidão do grupo para fechar a banca.")
-                
-                with st.form("form_aptidao_tcc2"):
-                    resposta_aptidao = st.radio(
-                        "**O projeto de Trabalho de Conclusão de Curso (TCC II) entregue pelo grupo encontra-se:**",
-                        ["", "APTO para apresentação", "INAPTO para apresentação"],
-                        index=0
-                    )
-                    
-                    assinatura_texto = st.text_input("**Assinatura Digital (Digite seu Nome Completo para assinar):**").strip()
-                    
-                    if st.form_submit_button("🚀 ENVIAR PARECER E CONCLUIR BANCA"):
-                        if resposta_aptidao == "":
-                            st.error("Por favor, selecione se o grupo está APTO ou INAPTO.")
-                        elif assinatura_texto == "":
-                            st.error("Por favor, digite seu nome no campo de assinatura para validar o documento.")
-                        else:
-                            with st.spinner("Gravando parecer de aptidão na planilha..."):
-                                try:
-                                    st.cache_data.clear()
-                                    df_atualizar_linha = conn.read(worksheet="Escalacao", ttl=0)
-                                    
-                                    df_atualizar_linha[c_aptidao_col] = df_atualizar_linha[c_aptidao_col].astype(str).replace('nan', '')
-                                    df_atualizar_linha[c_assinatura_col] = df_atualizar_linha[c_assinatura_col].astype(str).replace('nan', '')
-                                    
-                                    df_atualizar_linha.loc[linha_index_planilha - 2, c_aptidao_col] = str(resposta_aptidao)
-                                    df_atualizar_linha.loc[linha_index_planilha - 2, c_assinatura_col] = str(assinatura_texto)
-                                    
-                                    conn.update(worksheet="Escalacao", data=df_atualizar_linha)
-                                    
-                                    st.balloons()
-                                    st.success("🎉 Ficha de Aptidão registrada com sucesso! Lote concluído.")
-                                    st.session_state["grupo_selecionado"] = ""
-                                    time.sleep(0.5)
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error("Erro ao processar o salvamento. Tente novamente em alguns segundos.")
-
-            # --- TELA 1: FORMULÁRIO DE NOTAS INDIVIDUAIS ---
-            elif exibir_formulario_notas:
-                @st.fragment
-                def formulario_avaliacao(aluno_para_salvar):
-                    rubrica = {}
-                    
-                    if eh_orientador:
-                        st.info(f"🌱 Avaliando individualmente o discente: **{aluno_para_salvar}**")
-                        
-                        if "MCM IV" in turma_bruta or "MCM 4" in turma_bruta:
-                            rubrica = {
-                                "Desenv. - Envolvimento e Responsabilidade": (5, "Participação proativa, demonstrando alta responsabilidade e comprometimento no processo de elaboração."),
-                                "Desenv. - Relação com Orientador / Diálogo": (5, "Relação colaborativa, com boa abertura ao diálogo e aceitação de sugestões."),
-                                "Desenv. - Desempenho e Cumprimento de Tarefas": (5, "Desempenho satisfatório, com activities realizadas de forma competente e engajada."),
-                                "Desenv. - Pontualidade e Compromisso": (5, "Pontualidade é mantida consistentemente, demonstrando compromisso com o processo."),
-                                "Responsabilidade com a Aprendizagem": (5, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e aprimoramento."),
-                                "Texto - Justificativa do Estudo": (6, "Apresenta com clareza a relevância científica, social ou profissional; bem estruturada e relacionada ao problema."),
-                                "Texto - Objetivo Geral e Específicos": (6, "Objetivo geral claro, coerente com a justificativa; objetivos específicos bem formulados e articulados."),
-                                "Texto - Fundamentação Teórica / Referências": (6, "Referencial teórico relevante, atualizado (últimos 5 anos em sua maioria) e articulado ao tema."),
-                                "Texto - Metodologia Proposta": (6, "Método bem descrito, adequado aos objetivos, com definição de tipo de estudo, população e análise."),
-                                "Texto - Cronograma de Execução": (3, "Cronograma bem estruturado, com etapas claras e prazos viáveis."),
-                                "Texto - Estrutura, Linguagem e Formatação": (3, "Texto bem escrito, estruturado, sem erros relevantes; segue as normas (ABNT ou Vancouver)."),
-                                "Relatório - Relatório de Pesquisa": (10, "Apreciação técnica do orientador sobre o documento final de consolidação dos dados compilados pelo discente.")
-                            }
-                        elif "TCC II" in turma_bruta or "TCC 2" in turma_bruta:
-                            rubrica = {
-                                "Discente - Envolvimento e Responsabilidade": (5, "Participação proativa, demonstrou alta responsabilidade e comprometimento no processo de elaboração do artigo."),
-                                "Discente - Relação com Orientador / Diálogo": (5, "Relação colaborativa, com boa abertura ao diálogo e aceitação de sugestões."),
-                                "Discente - Desempenho / Cumprimento de Tarefas": (4, "Desempenho satisfatório, com atividades realizadas de forma competente e engajada."),
-                                "Discente - Pontualidade e Compromisso": (3, "Pontualidade é mantida consistentemente, o que demonstra compromisso com o processo."),
-                                "Responsabilidade com a Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e de aprimoramento."),
-                                "Artigo - Estruturação e Escrita Científica": (5, "Estrutura adequada, com fluidez, concisão e excelência na redação científica."),
-                                "Artigo - Fundamentação e Atualização Bibliográfica": (4, "Fundamentação crítica, bem estruturada e com autores atuais e pertinentes à área médica."),
-                                "Artigo - Apresentação e Discussão dos Resultados": (4, "Resultados apresentados com clareza, com discussão crítica e integração aos achados da literatura."),
-                                "Artigo - Rigor Metodológico": (4, "Métodos bem descritos, compatíveis com o delineamento e objetivos do estudo."),
-                                "Artigo - Conclusão e Relevância Científica": (3, "Conclusão clara, alinhada aos objetivos e resultados, com destaque à relevância científica e aplicabilidade prática.")
-                            }
-                    else:
-                        st.info("🎓 Você está visualizando a Rubrica de Avaliação da Banca (Nota para o Grupo todo).")
-                        
-                        if "MCM IV" in turma_bruta or "MCM 4" in turma_bruta:
-                            rubrica = {
-                                "Delineamento - Rigor Científico e Metodologia": (10, "Adequação do desenho do estudo, viabilidade técnica e delineamento claro dos procedimentos propostos."),
-                                "Apresentação Oral - Clareza e Domínio": (10, "Domínio conceitual do conteúdo exposto, postura, uso do tempo regulamentar e clareza na defesa oral."),
-                                "Coerência - Estrutura Geral do Projeto": (10, "Lógica interna do manuscrito, alinhamento fluido entre a justificativa, os objetivos e o método.")
-                            }
-                        elif "TCC I" in turma_bruta or "TCC 1" in turma_bruta:
-                            rubrica = {
-                                "Tema": (3, "Clareza, delimitação e a atualidade do tema proposto."),
-                                "Resumo": (1, "Objetivo, método, resultados esperados e palavras-chave."),
-                                "Introdução": (5, "Contextualização do tema e problema de pesquisa."),
-                                "Justificativa": (5, "Importância do trabalho e contribuição científica."),
-                                "Objetivos": (5, "Objetivo geral e específicos mensuráveis."),
-                                "Metodologia": (10, "Desenho do estudo, criteria e ética."),
-                                "Referências": (1, "Uso de normas ABNT/Vancouver."),
-                                "Apresentação Oral": (10, "Domínio de conteúdo, postura e clareza."),
-                                "Coerência": (10, "Lógica entre introdução, objetivos e métodos."),
-                                "Qualidade Visual": (9, "Organização dos slides e recursos."),
-                                "Tempo": (1, "Intervalo de 10 a 15 minutos de apresentação.")
-                            }
-                        elif "TCC II" in turma_bruta or "TCC 2" in turma_bruta or "MCM V" in turma_bruta or "MCM 5" in turma_bruta:
-                            rubrica = {
-                                "Tema/Resumo": (4, "Qualidade técnica do resumo e aderência ao tema."),
-                                "Introdução": (5, "Fundamentação teórica sólida e revisão."),
-                                "Metodologia": (5, "Execução real do método proposto."),
-                                "Resultados": (5, "Apresentação clara dos dados obtidos."),
-                                "Discussão": (10, "Capacidade crítica de comparar resultados."),
-                                "Referências": (1, "Rigor técnico nas citações e bibliografia."),
-                                "Apresentação Oral": (10, "Segurança na defesa dos resultados."),
-                                "Coerência": (10, "União lógica de todas as partes do trabalho."),
-                                "Qualidade Visual": (9, "Profissionalismo na apresentação visual."),
-                                "Tempo": (1, "Intervalo de 15 a 20 minutos de apresentação.")
-                            }
-
-                    if not rubrica:
-                        return
-
-                    v_max = sum(p for p, h in rubrica.values())
-                    st.write(f"### 📝 Critérios (Máximo: {v_max} pontos)")
-                    
-                    notas = {}
-                    for item, (p, help_t) in rubrica.items():
-                        passo_slider = 0.5 if p == 1 else 1
-                        valor_padrao = 0.0 if p == 1 else 0
-                        
-                        notas[item] = st.slider(
-                            f"**{item} ({p} pts)**", 
-                            min_value=valor_padrao, 
-                            max_value=float(p), 
-                            value=valor_padrao, 
-                            step=passo_slider, 
-                            help=help_t, 
-                            key=f"s_{item}_{aluno_para_salvar}"
-                        )
-
-                    total = sum(notas.values())
-                    st.markdown(f"## Nota Atribuída: {total} / {v_max}")
-
-                    tem_zero = any(v == 0 for v in notas.values())
-                    conf_zero = True
-                    if tem_zero:
-                        st.error("⚠️ Existem critérios com nota zero.")
-                        conf_zero = st.checkbox("Confirmo que as notas zero são intencionais.", key=f"c_zero_{aluno_para_salvar}")
-
-                    if st.button("🚀 GRAVAR AVALIAÇÃO NO SISTEMA", key=f"btn_save_{aluno_para_salvar}"):
-                        if tem_zero and not conf_zero:
-                            st.warning("Confirme as notas zero antes de gravar.")
-                        else:
-                            with st.spinner("A gravar notas e a sincronizar base de dados..."):
-                                try:
-                                    st.cache_data.clear()
-                                    df_at = conn.read(worksheet="Respostas", ttl=0)
-                                    if df_at.empty or not all(col in df_at.columns for col in colunas_respostas_obrigatorias):
-                                        df_at = pd.DataFrame(columns=colunas_respostas_obrigatorias)
-                                    
-                                    nova_l = pd.DataFrame([{
-                                        "Avaliador": nome_completo_docente, 
-                                        "Email_Avaliador": email_user, 
-                                        "Alunos": aluno_para_salvar, 
-                                        "Nota_Final": total, 
-                                        "Papel": "Orientador" if eh_orientador else "Banca",
-                                        "Data_Hora": obter_agora().strftime("%d/%m/%Y %H:%M")
-                                    }])
-                                    df_f = pd.concat([df_at, nova_l], ignore_index=True)
-                                    conn.update(worksheet="Respostas", data=df_f)
-                                    
-                                    st.success("✅ Avaliação gravada com sucesso!")
-                                    time.sleep(0.5)
-                                    st.rerun()
-                                except:
-                                    time.sleep(0.5)
-                                    st.rerun()
-
-                formulario_avaliacao(aluno_alvo_final)
+                            st.error("Erro na sincronização. Tente gravar novamente.")
