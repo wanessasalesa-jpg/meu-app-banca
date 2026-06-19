@@ -14,7 +14,7 @@ fuso_bruta = pytz.timezone('America/Sao_Paulo')
 def obter_agora():
     return datetime.now(fuso_bruta)
 
-# FUNÇÃO PARA ENCURTAR NOMES NA EXIBIÇÃO DO APP
+# FUNÇÃO PARA ENCURTAR NOMES NA EXIBIÇÃO DO APP (IGNORA PREPOSIÇÕES)
 def tratar_nome_curto(nome_completo):
     if not nome_completo or pd.isna(nome_completo):
         return ""
@@ -22,7 +22,6 @@ def tratar_nome_curto(nome_completo):
     if len(partes) == 1:
         return partes[0]
     
-    # Ignora preposições para não cortar o nome pela metade
     preposicoes = ['de', 'da', 'do', 'das', 'dos', 'e']
     if partes[1].lower() in preposicoes and len(partes) > 2:
         return f"{partes[0]} {partes[1]} {partes[2]}"
@@ -35,8 +34,9 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def get_data(aba, ttl_sec=2):
     return conn.read(worksheet=aba, ttl=ttl_sec)
 
+# TEMPO DE CACHE REDUZIDO PARA 30 SEGUNDOS (ATUALIZAÇÃO QUASE EM TEMPO REAL)
 try:
-    df_escalacao = get_data("Escalacao", ttl_sec=300)
+    df_escalacao = get_data("Escalacao", ttl_sec=30)
 except:
     st.error("Conectando ao banco de dados... Aguarde.")
     time.sleep(1)
@@ -45,16 +45,29 @@ except:
 # --- MAPEAMENTO CASE-INSENSITIVE DAS COLUNAS DA ESCALAÇÃO ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
 
-# Radar Inteligente: Busca variações do nome das colunas (Resolve o Bug do Suplente)
-c_av1_email = colunas_reais.get('email_avaliador_1') or colunas_reais.get('email_avaliador 1') or colunas_reais.get('email avaliador 1')
+c_av1_email = colunas_reais.get('email_avaliador_1') or colunas_reais.get('email_avaliador 1')
 c_av1_nome = colunas_reais.get('avaliador_1') or colunas_reais.get('avaliador 1')
-c_av2_email = colunas_reais.get('email_avaliador_2') or colunas_reais.get('email_avaliador 2') or colunas_reais.get('email avaliador 2')
+c_av2_email = colunas_reais.get('email_avaliador_2') or colunas_reais.get('email_avaliador 2')
 c_av2_nome = colunas_reais.get('avaliador_2') or colunas_reais.get('avaliador 2')
-c_sup_email = colunas_reais.get('email_avaliador_suplente') or colunas_reais.get('email_suplente') or colunas_reais.get('email avaliador suplente') or colunas_reais.get('email suplente')
-c_sup_nome = colunas_reais.get('avaliador_suplente') or colunas_reais.get('avaliador suplente') or colunas_reais.get('suplente')
+
+# RADAR INDESTRUTÍVEL DO SUPLENTE
+c_sup_email = colunas_reais.get('email_avaliador_suplente') or colunas_reais.get('email_suplente')
+c_sup_nome = colunas_reais.get('avaliador_suplente') or colunas_reais.get('suplente')
+
+# Se ainda não encontrou o suplente, varre todas as colunas procurando a palavra
+if not c_sup_email:
+    for k, v in colunas_reais.items():
+        if 'suplente' in k and 'email' in k:
+            c_sup_email = v
+            break
+if not c_sup_nome:
+    for k, v in colunas_reais.items():
+        if 'suplente' in k and 'email' not in k:
+            c_sup_nome = v
+            break
+
 c_ori_email = colunas_reais.get('email_orientador') or colunas_reais.get('email orientador')
 c_ori_nome = colunas_reais.get('orientador')
-
 c_turma = colunas_reais.get('turma')
 c_titulo = colunas_reais.get('titulo')
 c_data = colunas_reais.get('data')
@@ -143,7 +156,7 @@ tem_papel_sup = verificar_presenca_email(email_user, c_sup_email)
 tem_papel_banca = tem_papel_av1 or tem_papel_av2 or tem_papel_sup
 
 if "perfil_ativo" not in st.session_state:
-    # Prioriza iniciar pela Banca caso tenha Perfil Duplo
+    # LÓGICA DE PRIORIDADE: Se tem perfil duplo, carrega a Banca primeiro
     if tem_papel_banca:
         st.session_state.perfil_ativo = "Banca"
     else:
@@ -240,12 +253,13 @@ if not df_escalacao.empty:
         for idx, row in possiveis.iterrows():
             turma_check = str(row[c_turma]).strip().upper() if c_turma else ""
             
-            # IMUNIDADE MCM V: Orientadores não avaliam notas, não acumulam pendências
+            # IMUNIDADE MCM V: Orientador de MCM V não fica com pendência travada
             if "MCM V" in turma_check or "MCM 5" in turma_check:
                 continue
                 
             alunos_grupo = obter_lista_alunos_linha(row)
             
+            # Checa se o orientador já lançou as notas de cada aluno individualmente
             avaliados = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Orientador")]["Alunos"].tolist()
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
             
@@ -326,6 +340,7 @@ else:
         alunos_reais_lista = obter_lista_alunos_linha(dados)
         string_grupo_completo = ", ".join(alunos_reais_lista)
         
+        # Identifica o índice da linha na planilha real para atualizações diretas
         linha_index_planilha = dados.name + 2 
         
         banca_liberada = True
@@ -367,17 +382,19 @@ else:
                     exibir_formulario_notas = False
                     st.warning("⚠️ Nota do orientador não aplicável para esta turma. A turma MCM V possui 100% da nota final atribuída exclusivamente pela banca examinadora.")
                 else:
+                    # Filtra quais alunos deste grupo já ganharam nota do Orientador
                     avaliados_na_aba = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Orientador")]["Alunos"].tolist()
                     lista_alunos_individuais = [a for a in alunos_reais_lista if a not in avaliados_na_aba]
                     
                     if lista_alunos_individuais:
                         aluno_alvo_final = st.selectbox(
                             "👤 Selecione o Aluno para atribuir a nota individual:", 
-                            lista_alunos_individuais, 
+                            lista_alunos_individuais,
                             format_func=tratar_nome_curto
                         )
                     else:
                         exibir_formulario_notas = False
+                        # SEGUNDA TELA ATIVADA: Se for TCC II e as notas individuais acabaram, abre o fechamento!
                         if "TCC II" in turma_bruta or "TCC 2" in turma_bruta:
                             exibir_tela_aptidao_final = True
                         else:
@@ -420,6 +437,7 @@ else:
                                     if c_assinatura_col in df_atualizar_linha.columns:
                                         df_atualizar_linha[c_assinatura_col] = df_atualizar_linha[c_assinatura_col].astype(object)
                                     
+                                    # Grava direto nas colunas R e S que você criou na planilha
                                     df_atualizar_linha.loc[linha_index_planilha - 2, c_aptidao_col] = resposta_aptidao
                                     df_atualizar_linha.loc[linha_index_planilha - 2, c_assinatura_col] = assinatura_texto
                                     
