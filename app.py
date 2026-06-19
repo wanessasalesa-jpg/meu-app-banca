@@ -41,32 +41,41 @@ except:
     time.sleep(1)
     st.rerun()
 
-# --- MAPEAMENTO INTELIGENTE E DINÂMICO DAS COLUNAS ---
-c_av1_email = next((col for col in df_escalacao.columns if 'email' in str(col).lower() and '1' in str(col).lower()), None)
-c_av1_nome = next((col for col in df_escalacao.columns if 'avaliador' in str(col).lower() and '1' in str(col).lower() and 'email' not in str(col).lower()), None)
-
-c_av2_email = next((col for col in df_escalacao.columns if 'email' in str(col).lower() and '2' in str(col).lower()), None)
-c_av2_nome = next((col for col in df_escalacao.columns if 'avaliador' in str(col).lower() and '2' in str(col).lower() and 'email' not in str(col).lower()), None)
-
-c_sup_email = next((col for col in df_escalacao.columns if 'email' in str(col).lower() and 'suplente' in str(col).lower()), None)
-c_sup_nome = next((col for col in df_escalacao.columns if 'suplente' in str(col).lower() and 'email' not in str(col).lower()), None)
-
-c_ori_email = next((col for col in df_escalacao.columns if 'email' in str(col).lower() and 'orientador' in str(col).lower()), None)
-c_ori_nome = next((col for col in df_escalacao.columns if 'orientador' in str(col).lower() and 'email' not in str(col).lower()), None)
-
+# --- MAPEAMENTO CASE-INSENSITIVE DAS COLUNAS DA ESCALAÇÃO ---
 colunas_reais = {str(col).strip().lower(): col for col in df_escalacao.columns}
+
+c_av1_email = colunas_reais.get('email_avaliador_1') or colunas_reais.get('email_avaliador 1') or colunas_reais.get('email avaliador 1')
+c_av1_nome = colunas_reais.get('avaliador_1') or colunas_reais.get('avaliador 1')
+c_av2_email = colunas_reais.get('email_avaliador_2') or colunas_reais.get('email_avaliador 2') or colunas_reais.get('email avaliador 2')
+c_av2_nome = colunas_reais.get('avaliador_2') or colunas_reais.get('avaliador 2')
+
+# Mapeamento dinâmico e flexível para a coluna do Suplente
+c_sup_email = colunas_reais.get('email_avaliador_suplente') or colunas_reais.get('email_suplente') or colunas_reais.get('email avaliador suplente') or colunas_reais.get('email suplente')
+c_sup_nome = colunas_reais.get('avaliador_suplente') or colunas_reais.get('avaliador suplente') or colunas_reais.get('suplente')
+
+c_ori_email = colunas_reais.get('email_orientador') or colunas_reais.get('email orientador')
+c_ori_nome = colunas_reais.get('orientador')
 c_turma = colunas_reais.get('turma')
 c_titulo = colunas_reais.get('titulo')
 c_data = colunas_reais.get('data')
 c_horario = colunas_reais.get('horario')
+
+# COLUNAS REAIS DA PLANILHA PARA SALVAR O FECHAMENTO DE APTIDÃO
 c_aptidao_col = colunas_reais.get('aptidão defesa') or colunas_reais.get('aptidao defesa')
 c_assinatura_col = colunas_reais.get('assinatura orientador')
 
-c_aluno1 = next((col for col in df_escalacao.columns if 'aluno' in str(col).lower() and '1' in str(col).lower()), None)
-c_aluno2 = next((col for col in df_escalacao.columns if 'aluno' in str(col).lower() and '2' in str(col).lower()), None)
-c_aluno3 = next((col for col in df_escalacao.columns if 'aluno' in str(col).lower() and '3' in str(col).lower()), None)
-c_aluno4 = next((col for col in df_escalacao.columns if 'aluno' in str(col).lower() and '4' in str(col).lower()), None)
-c_aluno5 = next((col for col in df_escalacao.columns if 'aluno' in str(col).lower() and '5' in str(col).lower()), None)
+# MAPEAMENTO DAS COLUNAS SEPARADAS DE ALUNOS
+c_aluno1 = colunas_reais.get('aluno_1') or colunas_reais.get('aluno 1')
+c_aluno2 = colunas_reais.get('aluno_2') or colunas_reais.get('aluno 2')
+c_aluno3 = colunas_reais.get('aluno_3') or colunas_reais.get('aluno 3')
+c_aluno4 = colunas_reais.get('aluno_4') or colunas_reais.get('aluno 4')
+c_aluno5 = colunas_reais.get('aluno_5') or colunas_reais.get('aluno 5')
+
+# FUNÇÃO AUXILIAR PARA CHECAR SE O EMAIL EXISTE NA COLUNA MAPEADA
+def verificar_presenca_email(email, coluna_real):
+    if not coluna_real:
+        return False
+    return email in df_escalacao[coluna_real].astype(str).str.strip().str.lower().unique()
 
 # --- TRATAMENTO SEGURO DA ABA DE RESPOSTAS ---
 colunas_respostas_obrigatorias = ["Avaliador", "Email_Avaliador", "Alunos", "Nota_Final", "Papel", "Data_Hora"]
@@ -107,27 +116,14 @@ if 'email' not in st.session_state:
 
     st.write("### Identificação do Docente")
     email_raw = st.text_input("Digite seu e-mail cadastrado:").strip()
-    
     if st.button("Acessar Sistema"):
         if email_raw:
-            st.cache_data.clear() 
-            df_fresh = conn.read(worksheet="Escalacao", ttl=0) 
+            email_limpo = email_raw.lower()
             
-            sup_col_f = next((col for col in df_fresh.columns if 'email' in str(col).lower() and 'suplente' in str(col).lower()), None)
-            ori_col_f = next((col for col in df_fresh.columns if 'email' in str(col).lower() and 'orientador' in str(col).lower()), None)
-            av1_col_f = next((col for col in df_fresh.columns if 'email' in str(col).lower() and '1' in str(col).lower()), None)
-            av2_col_f = next((col for col in df_fresh.columns if 'email' in str(col).lower() and '2' in str(col).lower()), None)
-
-            email_limpo = email_raw.lower().strip()
-            
-            def checar_fresh(email_l, c_nome):
-                if not c_nome: return False
-                return email_l in df_fresh[c_nome].astype(str).str.strip().str.lower().unique()
-
-            id_banca1 = checar_fresh(email_limpo, av1_col_f)
-            id_banca2 = checar_fresh(email_limpo, av2_col_f)
-            id_suplente = checar_fresh(email_limpo, sup_col_f)
-            id_orienta = checar_fresh(email_limpo, ori_col_f)
+            id_banca1 = verificar_presenca_email(email_limpo, c_av1_email)
+            id_banca2 = verificar_presenca_email(email_limpo, c_av2_email)
+            id_suplente = verificar_presenca_email(email_limpo, c_sup_email)
+            id_orienta = verificar_presenca_email(email_limpo, c_ori_email)
             
             if id_banca1 or id_banca2 or id_suplente or id_orienta:
                 st.session_state.email = email_limpo
@@ -140,14 +136,10 @@ if 'email' not in st.session_state:
 # --- DEFINIÇÃO DO PAPEL LOGADO ---
 email_user = st.session_state.email
 
-def checar(email, col_name):
-    if not col_name: return False
-    return email in df_escalacao[col_name].astype(str).str.strip().str.lower().unique()
-
-tem_papel_ori = checar(email_user, c_ori_email)
-tem_papel_av1 = checar(email_user, c_av1_email)
-tem_papel_av2 = checar(email_user, c_av2_email)
-tem_papel_sup = checar(email_user, c_sup_email)
+tem_papel_ori = verificar_presenca_email(email_user, c_ori_email)
+tem_papel_av1 = verificar_presenca_email(email_user, c_av1_email)
+tem_papel_av2 = verificar_presenca_email(email_user, c_av2_email)
+tem_papel_sup = verificar_presenca_email(email_user, c_sup_email)
 tem_papel_banca = tem_papel_av1 or tem_papel_av2 or tem_papel_sup
 
 if "perfil_ativo" not in st.session_state:
@@ -221,7 +213,7 @@ st.markdown(f"""
 # --- SELETOR DE PERFIL (PAPEL DUPLO) ---
 if tem_papel_ori and tem_papel_banca:
     st.info("🔄 **Perfil Duplo Detectado:** Você atua como Orientador e também como Avaliador de Banca.")
-    novo_perfil = st.radio("Selecione qual painel acessar agora:", ["Orientador", "Banca"], index=0 if eh_orientador else 1, horizontal=True)
+    novo_perfil = st.radio("Selecione qual painel acessar agora:", ["Orientador", "Banca"], index=1 if st.session_state.perfil_ativo == "Banca" else 0, horizontal=True)
     if novo_perfil != st.session_state.perfil_ativo:
         st.session_state.perfil_ativo = novo_perfil
         st.rerun()
@@ -247,12 +239,11 @@ if not df_escalacao.empty:
         for idx, row in possiveis.iterrows():
             turma_check = str(row[c_turma]).strip().upper() if c_turma else ""
             
-            # IMUNIDADE MCM V: Orientadores não avaliam notas, logo não ficam com pendência travada
+            # Imunidade MCM V para Orientadores
             if "MCM V" in turma_check or "MCM 5" in turma_check:
                 continue
                 
             alunos_grupo = obter_lista_alunos_linha(row)
-            
             avaliados = df_respostas[(df_respostas["Email_Avaliador"] == email_user) & (df_respostas["Papel"] == "Orientador")]["Alunos"].tolist()
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
             
@@ -262,14 +253,14 @@ if not df_escalacao.empty:
             if alunos_restantes or precisa_tela_aptidao:
                 linhas_pendentes.append(row)
                 total_pendencias_contador += len(alunos_restantes) + (1 if precisa_tela_aptidao and not alunos_restantes else 0)
-        if lines_pendentes := linhas_pendentes:
-            pendentes = pd.DataFrame(lines_pendentes)
+        if linhas_pendentes:
+            pendentes = pd.DataFrame(linhas_pendentes)
     else:
         cond_banca = pd.Series(False, index=df_escalacao.index)
         if c_av1_email:
             cond_banca |= (df_escalacao[c_av1_email].astype(str).str.lower() == email_user)
         if c_av2_email:
-            cond_banca |= (df_escalacao[df_escalacao[c_av2_email].astype(str).str.lower() == email_user])
+            cond_banca |= (df_escalacao[c_av2_email].astype(str).str.lower() == email_user) # CORREÇÃO CRÍTICA DO BUG DO SUPLENTE
         if c_sup_email:
             cond_banca |= (df_escalacao[c_sup_email].astype(str).str.lower() == email_user)
             
@@ -391,7 +382,7 @@ else:
                             st.success("Todos os alunos deste grupo já foram avaliados por si!")
 
             # -----------------------------------------------------------------
-            # TELA SEGUINTE DE FECHAMENTO: SÓ VAI APARECER PARA TCC II APÓS AS NOTAS INDIVIDUAIS
+            # TELA SEGUINTE DE FECHAMENTO (EXCLUSIVO TCC II)
             # -----------------------------------------------------------------
             if eh_orientador and exibir_tela_aptidao_final:
                 st.markdown("---")
@@ -414,7 +405,7 @@ else:
                     if st.form_submit_button("🚀 ENVIAR PARECER E CONCLUIR BANCA"):
                         if resposta_aptidao == "":
                             st.error("Por favor, selecione se o grupo está APTO ou INAPTO.")
-                        elif signature_texto == "":
+                        elif assinatura_texto == "":
                             st.error("Por favor, digite seu nome no campo de assinatura para validar o documento.")
                         else:
                             with st.spinner("Gravando parecer de aptidão na planilha..."):
@@ -460,7 +451,7 @@ else:
                             "Texto - Metodologia Proposta": (10, "Método bem descrito, adequado aos objetivos, com definição de tipo de estudo, população e análise."),
                             "Texto - Cronograma de Execução": (1, "Cronograma bem estruturado, com etapas claras e prazos viáveis."),
                             "Texto - Estrutura, Linguagem e Formatação": (6, "Texto bem escrito, estruturado, sem erros relevantes; segue as normas (ABNT ou Vancouver)."),
-                            "Relatório - Relatório de Pesquisa": (10, "Apreciação técnica do orientador sobre o documento final de consolidação dos dados compilados pelo discente.")
+                            "Relatório - Relatório de Pesquisa": (10, "Apreciação técnica do orientador sobre o documento final de conclusão dos dados compilados.")
                         }
                     elif "TCC II" in turma_bruta or "TCC 2" in turma_bruta:
                         rubrica = {
@@ -483,7 +474,7 @@ else:
                             "Discente - Pontualidade e Compromisso": (3, "Pontualidade é mantida consistentemente, demonstrando compromisso com os prazos."),
                             "Responsabilidade com a Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e de aprimoramento."),
                             "Projeto - Formulação do Problema e Justificativa": (5, "Problema de pesquisa é excepcionalmente formulado, e a justificativa é altamente persuasiva, atualizada e relevante."),
-                            "Projeto - Objetivos e Hipóteses": (4, "Objetivos são bem formulados and alinhados, e as hipóteses são pertinentes e testáveis."),
+                            "Projeto - Objetivos e Hipóteses": (4, "Objetivos são bem formulados e alinhados, e as hipóteses são pertinentes e testáveis."),
                             "Projeto - Revisão de Literatura": (4, "Revisão de literatura é abrangente, crítica e identifica claramente a relevância do estudo na literatura existente."),
                             "Projeto - Metodologia e ABNT": (4, "Metodologia é detalhada e abrangente, proporcionando uma compreensão completa; projeto formatado conforme ABNT."),
                             "Projeto - Considerações Éticas e Viabilidade": (3, "Considerações éticas são discutidas de maneira apropriada, e a viabilidade do estudo é abordada.")
@@ -498,7 +489,7 @@ else:
                             "Coerência - Estrutura Geral do Projeto": (10, "Lógica interna do manuscrito, alinhamento fluido entre a justificativa, os objetivos e o método.")
                         }
                     elif "MCM V" in turma_bruta or "MCM 5" in turma_bruta:
-                        # BLOCO EXCLUSIVO: Ajustado para somar 100 pontos para a Banca Examinadora
+                        # CORREÇÃO DEFINITIVA: Bloco exclusivo com rubrica expandida para 100 pontos integrais da Banca
                         rubrica = {
                             "Tema/Resumo": (5, "Qualidade técnica do resumo e aderência ao tema."),
                             "Introdução": (10, "Fundamentação teórica sólida e revisão."),
