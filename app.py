@@ -22,56 +22,63 @@ def tratar_nome_curto(nome_completo):
     partes = str(nome_completo).strip().split()
     if len(partes) == 1:
         return partes[0]
-    
     preposicoes = ['de', 'da', 'do', 'das', 'dos', 'e']
     if partes[1].lower() in preposicoes and len(partes) > 2:
         return f"{partes[0]} {partes[1]} {partes[2]}"
-        
     return f"{partes[0]} {partes[1]}"
 
 # 3. CONEXÃO COM GOOGLE SHEETS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-def get_data(aba, ttl_sec=2):
+def get_data(aba, ttl_sec=0):
     return conn.read(worksheet=aba, ttl=ttl_sec)
 
 try:
     df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
-    # Padronização absoluta: tudo em minúsculas imediatamente após a leitura
+    # Padronização absoluta: tudo em minúsculas e sem espaços inúteis
     df_escalacao.columns = df_escalacao.columns.astype(str).str.strip().str.lower()
 except:
     st.error("Conectando ao banco de dados... Aguarde.")
     time.sleep(1)
     st.rerun()
 
-# --- MAPEAMENTO SEGURO E DIRETO DAS COLUNAS EM MINÚSCULAS ---
-c_av1_email = next((c for c in df_escalacao.columns if 'email' in c and '1' in c), None)
-c_av1_nome = next((c for c in df_escalacao.columns if 'avaliador' in c and '1' in c and 'email' not in c), None)
+# --- MAPEAMENTO BLINDADO DE COLUNAS (O RADAR) ---
+def buscar_coluna(palavras_chave, evitar=None):
+    for col in df_escalacao.columns:
+        if all(p in col for p in palavras_chave):
+            if evitar and evitar in col:
+                continue
+            return col
+    return None
 
-c_av2_email = next((c for c in df_escalacao.columns if 'email' in c and '2' in c), None)
-c_av2_nome = next((c for c in df_escalacao.columns if 'avaliador' in c and '2' in c and 'email' not in c), None)
+c_av1_email = buscar_coluna(['email', '1'])
+c_av1_nome = buscar_coluna(['avaliador', '1'], evitar='email')
 
-c_sup_email = next((c for c in df_escalacao.columns if 'email' in c and 'suplente' in c), None)
-c_sup_nome = next((c for c in df_escalacao.columns if 'suplente' in c and 'email' not in c), None)
+c_av2_email = buscar_coluna(['email', '2'])
+c_av2_nome = buscar_coluna(['avaliador', '2'], evitar='email')
 
-c_ori_email = next((c for c in df_escalacao.columns if 'email' in c and 'orientador' in c), None)
-c_ori_nome = next((c for c in df_escalacao.columns if 'orientador' in c and 'email' not in c), None)
+# Radar infalível para o Suplente
+c_sup_email = buscar_coluna(['email', 'suplente'])
+c_sup_nome = buscar_coluna(['suplente'], evitar='email')
 
-c_turma = next((c for c in df_escalacao.columns if 'turma' in c), None)
-c_titulo = next((c for c in df_escalacao.columns if 'titulo' in c or 'título' in c), None)
-c_data = next((c for c in df_escalacao.columns if 'data' in c), None)
-c_horario = next((c for c in df_escalacao.columns if 'horario' in c or 'horário' in c), None)
+c_ori_email = buscar_coluna(['email', 'orientador'])
+c_ori_nome = buscar_coluna(['orientador'], evitar='email')
 
-c_aptidao_col = next((c for c in df_escalacao.columns if 'aptid' in c and 'defesa' in c), None)
-c_assinatura_col = next((c for c in df_escalacao.columns if 'assinatura' in c and 'orientador' in c), None)
+c_turma = buscar_coluna(['turma'])
+c_titulo = buscar_coluna(['titulo']) or buscar_coluna(['título'])
+c_data = buscar_coluna(['data'])
+c_horario = buscar_coluna(['horario']) or buscar_coluna(['horário'])
 
-c_aluno1 = next((c for c in df_escalacao.columns if 'aluno' in c and '1' in c), None)
-c_aluno2 = next((c for c in df_escalacao.columns if 'aluno' in c and '2' in c), None)
-c_aluno3 = next((c for c in df_escalacao.columns if 'aluno' in c and '3' in c), None)
-c_aluno4 = next((c for c in df_escalacao.columns if 'aluno' in c and '4' in c), None)
-c_aluno5 = next((c for c in df_escalacao.columns if 'aluno' in c and '5' in c), None)
+c_aptidao_col = buscar_coluna(['aptid', 'defesa'])
+c_assinatura_col = buscar_coluna(['assinatura', 'orientador'])
 
-# FUNÇÃO AUXILIAR PARA CHECAR SE O EMAIL EXISTE NA COLUNA MAPEADA
+c_aluno1 = buscar_coluna(['aluno', '1'])
+c_aluno2 = buscar_coluna(['aluno', '2'])
+c_aluno3 = buscar_coluna(['aluno', '3'])
+c_aluno4 = buscar_coluna(['aluno', '4'])
+c_aluno5 = buscar_coluna(['aluno', '5'])
+
+# FUNÇÃO AUXILIAR PARA CHECAR SE O EMAIL EXISTE
 def verificar_presenca_email(email, coluna_real):
     if not coluna_real or coluna_real not in df_escalacao.columns:
         return False
@@ -80,7 +87,7 @@ def verificar_presenca_email(email, coluna_real):
 # --- TRATAMENTO SEGURO DA ABA DE RESPOSTAS ---
 colunas_respostas_obrigatorias = ["Avaliador", "Email_Avaliador", "Alunos", "Nota_Final", "Papel", "Data_Hora"]
 try:
-    df_respostas = get_data("Respostas", ttl_sec=0)
+    df_respostas = conn.read(worksheet="Respostas", ttl=0)
     if df_respostas.empty or not all(col in df_respostas.columns for col in colunas_respostas_obrigatorias):
         df_respostas = pd.DataFrame(columns=colunas_respostas_obrigatorias)
 except:
@@ -110,7 +117,8 @@ if 'email' not in st.session_state:
         """, unsafe_allow_html=True)
 
     st.title("🎓 CRIVO")
-    st.subheader("Sistema de Gestão de Bancas Acadêmicas")
+    # TAG DE SEGURANÇA PARA VOCÊ SABER QUE O CÓDIGO ATUALIZOU:
+    st.subheader("Sistema de Gestão de Bancas Acadêmicas - v2.0")
     st.caption("© 2026 Desenvolvido por Wanessa Sales de Almeida")
     st.divider()
 
@@ -126,7 +134,7 @@ if 'email' not in st.session_state:
             id_orienta = verificar_presenca_email(email_limpo, c_ori_email)
             
             if id_banca1 or id_banca2 or id_suplente or id_orienta:
-                st.session_state.clear() # Limpa resíduos antigos completamente
+                st.session_state.clear()
                 st.session_state.email = email_limpo
                 st.query_params["user"] = email_limpo
                 st.rerun()
@@ -154,14 +162,14 @@ eh_banca = not eh_orientador
 
 nome_completo_docente = ""
 if eh_orientador and tem_papel_ori:
-    nome_completo_docente = df_escalacao[df_escalacao[c_ori_email].astype(str).str.lower() == email_user][c_ori_nome].iloc[0]
+    nome_completo_docente = df_escalacao[df_escalacao[c_ori_email].astype(str).str.strip().str.lower() == email_user][c_ori_nome].iloc[0]
 else:
     if tem_papel_av1:
-        nome_completo_docente = df_escalacao[df_escalacao[c_av1_email].astype(str).str.lower() == email_user][c_av1_nome].iloc[0]
+        nome_completo_docente = df_escalacao[df_escalacao[c_av1_email].astype(str).str.strip().str.lower() == email_user][c_av1_nome].iloc[0]
     elif tem_papel_av2:
-        nome_completo_docente = df_escalacao[df_escalacao[c_av2_email].astype(str).str.lower() == email_user][c_av2_nome].iloc[0]
+        nome_completo_docente = df_escalacao[df_escalacao[c_av2_email].astype(str).str.strip().str.lower() == email_user][c_av2_nome].iloc[0]
     elif tem_papel_sup:
-        nome_completo_docente = df_escalacao[df_escalacao[c_sup_email].astype(str).str.lower() == email_user][c_sup_nome].iloc[0]
+        nome_completo_docente = df_escalacao[df_escalacao[c_sup_email].astype(str).str.strip().str.lower() == email_user][c_sup_nome].iloc[0]
 
 nome_exibicao = tratar_nome_curto(nome_completo_docente)
 
@@ -219,7 +227,6 @@ if tem_papel_ori and tem_papel_banca:
         st.session_state.perfil_ativo = novo_perfil
         st.rerun()
 
-# FUNÇÃO AUXILIAR PARA MONTAR A LISTA DE ALUNOS REAL DE UMA LINHA DA ESCALAÇÃO
 def obter_lista_alunos_linha(row):
     lista = []
     for col_aluno in [c_aluno1, c_aluno2, c_aluno3, c_aluno4, c_aluno5]:
@@ -235,13 +242,14 @@ total_pendencias_contador = 0
 
 if not df_escalacao.empty:
     if eh_orientador:
-        possiveis = df_escalacao[df_escalacao[c_ori_email].astype(str).str.lower() == email_user].copy()
+        possiveis = df_escalacao[df_escalacao[c_ori_email].astype(str).str.strip().str.lower() == email_user].copy()
         linhas_pendentes = []
         for idx, row in possiveis.iterrows():
             turma_check = str(row[c_turma]).strip().upper() if c_turma else ""
+            tb_clean_check = turma_check.replace(" ", "")
             
-            # Imunidade MCM V para Orientadores
-            if "MCM V" in turma_check or "MCM 5" in turma_check:
+            # IMUNIDADE MCM V: Orientadores não avaliam notas
+            if "MCMV" in tb_clean_check or "MCM5" in tb_clean_check:
                 continue
                 
             alunos_grupo = obter_lista_alunos_linha(row)
@@ -249,7 +257,7 @@ if not df_escalacao.empty:
             alunos_restantes = [a for a in alunos_grupo if a not in avaliados]
             
             ja_preencheu_aptidao = pd.notna(row.get(c_aptidao_col)) and str(row.get(c_aptidao_col)).strip() != "" if c_aptidao_col else False
-            precisa_tela_aptidao = ("TCC II" in turma_check or "TCC 2" in turma_check) and not ja_preencheu_aptidao
+            precisa_tela_aptidao = ("TCCII" in tb_clean_check or "TCC2" in tb_clean_check) and not ja_preencheu_aptidao
             
             if alunos_restantes or precisa_tela_aptidao:
                 linhas_pendentes.append(row)
@@ -259,11 +267,11 @@ if not df_escalacao.empty:
     else:
         cond_banca = pd.Series(False, index=df_escalacao.index)
         if c_av1_email and c_av1_email in df_escalacao.columns:
-            cond_banca |= (df_escalacao[c_av1_email].astype(str).str.lower() == email_user)
+            cond_banca |= (df_escalacao[c_av1_email].astype(str).str.strip().str.lower() == email_user)
         if c_av2_email and c_av2_email in df_escalacao.columns:
-            cond_banca |= (df_escalacao[c_av2_email].astype(str).str.lower() == email_user)
+            cond_banca |= (df_escalacao[c_av2_email].astype(str).str.strip().str.lower() == email_user)
         if c_sup_email and c_sup_email in df_escalacao.columns:
-            cond_banca |= (df_escalacao[c_sup_email].astype(str).str.lower() == email_user)
+            cond_banca |= (df_escalacao[c_sup_email].astype(str).str.strip().str.lower() == email_user)
             
         possiveis = df_escalacao[cond_banca].copy()
         linhas_pendentes = []
@@ -486,7 +494,9 @@ else:
                             "Coerência - Estrutura Geral do Projeto": (10, "Lógica interna do manuscrito, alinhamento fluido entre a justificativa, os objetivos e o método.")
                         }
                     elif "MCMV" in tb_clean or "MCM5" in tb_clean:
-                        # SEPARAÇÃO CORRETA E INDEPENDENTE DO MCM V (SOMA 100 PONTOS)
+                        # -------------------------------------------------------------
+                        # RUBRICA BLINDADA DO MCM V: EXCLUSIVA E COM 100 PONTOS EXATOS
+                        # -------------------------------------------------------------
                         rubrica = {
                             "Tema/Resumo": (5, "Qualidade técnica do resumo e aderência ao tema."),
                             "Introdução": (10, "Fundamentação teórica sólida e revisão."),
