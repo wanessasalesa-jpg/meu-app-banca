@@ -35,7 +35,7 @@ def get_data(aba, ttl_sec=0):
 
 try:
     df_escalacao = conn.read(worksheet="Escalacao", ttl=0)
-    # Padronização absoluta: tudo em minúsculas e sem espaços inúteis
+    # Padronização absoluta de colunas em minúsculas imediatamente
     df_escalacao.columns = df_escalacao.columns.astype(str).str.strip().str.lower()
 except:
     st.error("Conectando ao banco de dados... Aguarde.")
@@ -57,7 +57,7 @@ c_av1_nome = buscar_coluna(['avaliador', '1'], evitar='email')
 c_av2_email = buscar_coluna(['email', '2'])
 c_av2_nome = buscar_coluna(['avaliador', '2'], evitar='email')
 
-# Radar infalível para o Suplente
+# Radar infalível para o Suplente (vai mapear 'email_avaliador_suplente' perfeitamente)
 c_sup_email = buscar_coluna(['email', 'suplente'])
 c_sup_nome = buscar_coluna(['suplente'], evitar='email')
 
@@ -117,8 +117,8 @@ if 'email' not in st.session_state:
         """, unsafe_allow_html=True)
 
     st.title("🎓 CRIVO")
-    # TAG DE SEGURANÇA PARA VOCÊ SABER QUE O CÓDIGO ATUALIZOU:
-    st.subheader("Sistema de Gestão de Bancas Acadêmicas - v2.0")
+    # MARCADOR VISUAL DE SUCESSO DA ATUALIZAÇÃO:
+    st.subheader("🚀 CRIVO ATUALIZADO - VERSÃO FINAL 3.0")
     st.caption("© 2026 Desenvolvido por Wanessa Sales de Almeida")
     st.divider()
 
@@ -248,7 +248,6 @@ if not df_escalacao.empty:
             turma_check = str(row[c_turma]).strip().upper() if c_turma else ""
             tb_clean_check = turma_check.replace(" ", "")
             
-            # IMUNIDADE MCM V: Orientadores não avaliam notas
             if "MCMV" in tb_clean_check or "MCM5" in tb_clean_check:
                 continue
                 
@@ -286,7 +285,7 @@ if not df_escalacao.empty:
         if linhas_pendentes:
             pendentes = pd.DataFrame(linhas_pendentes)
 
-# --- AMBIENTE VISUAL DO DOCENTE COM BLOCO DE SAÍDA SEGURO ---
+# --- AMBIENTE VISUAL DO DOCENTE ---
 col_user, col_exit = st.columns([3, 1])
 with col_user:
     st.write(f"**Docente:** {nome_exibicao} ({'Orientador' if eh_orientador else 'Banca Examinadora'})")
@@ -299,7 +298,6 @@ with col_exit:
             st.query_params.clear()
             st.rerun()
 
-# --- AVISO DE CONFIRMAÇÃO DE SAÍDA ---
 if st.session_state.get("tentou_sair_com_pendencia", False):
     st.warning(f"⚠️ **Atenção:** Ainda possui **{total_pendencias_contador}** avaliações pendentes registadas no seu nome!")
     col_cancela, col_confirma = st.columns(2)
@@ -391,9 +389,6 @@ else:
                         else:
                             st.success("Todos os alunos deste grupo já foram avaliados por si!")
 
-            # -----------------------------------------------------------------
-            # TELA SEGUINTE DE FECHAMENTO (EXCLUSIVO TCC II)
-            # -----------------------------------------------------------------
             if eh_orientador and exibir_tela_aptidao_final:
                 st.markdown("---")
                 st.subheader("📋 TELA 2: Ficha de Aptidão de Defesa (Exclusivo TCC II)")
@@ -402,7 +397,7 @@ else:
                 with st.form("form_aptidao_tcc2"):
                     resposta_aptidao = st.radio(
                         "**O projeto de Trabalho de Conclusão de Curso (TCC II) entregue pelo grupo encontra-se:**",
-                        ["", "APTO para apresentação", "INAPTO para apresentação"],
+                        ["", "APTO para presentation", "INAPTO para apresentação"],
                         index=0,
                         help="Marque a condição de aceitabilidade do trabalho para a defesa."
                     )
@@ -435,7 +430,6 @@ else:
                                 except Exception as e:
                                     st.error(f"Erro ao salvar: {e}")
 
-            # --- FORMULÁRIO DE AVALIAÇÃO DE NOTAS (TELA 1) ---
             elif exibir_formulario_notas:
                 aluno_para_salvar = aluno_alvo_final
                 rubrica = {}
@@ -467,7 +461,7 @@ else:
                             "Responsabilidade com a Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e de aprimoramento."),
                             "Artigo - Estruturação e Escrita Científica": (5, "Estrutura adequada, com fluidez, concisão e excelência na redação científica."),
                             "Artigo - Fundamentação e Atualização Bibliográfica": (4, "Fundamentação crítica, bem estruturada e com autores atuais e pertinentes à área médica."),
-                            "Artigo - Apresentação e Discussão dos Resultados": (4, "Resultados apresentados com clareza, com discussão crítica e integração aos achados da literatura."),
+                            "Artigo - Apresentação e Discussão dos Resultados": (4, "Resultados apresentados com clareza, com discussão crítica e integration aos achados da literatura."),
                             "Artigo - Rigor Metodológico": (4, "Métodos bem descritos, compatíveis com o delineamento e objetivos do estudo."),
                             "Artigo - Conclusão e Relevância Científica": (3, "Conclusão clara, alinhada aos objetivos e resultados, com destaque à relevância científica e aplicabilidade prática.")
                         }
@@ -494,9 +488,7 @@ else:
                             "Coerência - Estrutura Geral do Projeto": (10, "Lógica interna do manuscrito, alinhamento fluido entre a justificativa, os objetivos e o método.")
                         }
                     elif "MCMV" in tb_clean or "MCM5" in tb_clean:
-                        # -------------------------------------------------------------
-                        # RUBRICA BLINDADA DO MCM V: EXCLUSIVA E COM 100 PONTOS EXATOS
-                        # -------------------------------------------------------------
+                        # RUBRICA EXCLUSIVA DO MCM V FIXADA EM 100 PONTOS
                         rubrica = {
                             "Tema/Resumo": (5, "Qualidade técnica do resumo e aderência ao tema."),
                             "Introdução": (10, "Fundamentação teórica sólida e revisão."),
@@ -579,7 +571,7 @@ else:
                                     conn.update(worksheet="Respostas", data=df_f)
                                     
                                     st.balloons()
-                                    st.success("✅ Avaliação gravada com sucesso!")
+                                    st.success("¼ Avaliação gravada com sucesso!")
                                     time.sleep(1.5)
                                     st.rerun()
                                 except:
