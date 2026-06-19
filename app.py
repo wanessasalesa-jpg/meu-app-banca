@@ -41,7 +41,7 @@ except:
     time.sleep(1)
     st.rerun()
 
-# --- MAPEAMENTO INTELIGENTE E DINÂMICO DAS COLUNAS (O RADAR INDESTRUTÍVEL) ---
+# --- MAPEAMENTO INTELIGENTE E DINÂMICO DAS COLUNAS ---
 c_av1_email = next((col for col in df_escalacao.columns if 'email' in str(col).lower() and '1' in str(col).lower()), None)
 c_av1_nome = next((col for col in df_escalacao.columns if 'avaliador' in str(col).lower() and '1' in str(col).lower() and 'email' not in str(col).lower()), None)
 
@@ -108,11 +108,10 @@ if 'email' not in st.session_state:
     st.write("### Identificação do Docente")
     email_raw = st.text_input("Digite seu e-mail cadastrado:").strip()
     
-    # O BOTÃO COM O CACHE KILLER: Puxa os dados ao vivo na hora de logar!
     if st.button("Acessar Sistema"):
         if email_raw:
-            st.cache_data.clear() # Mata o fantasma da memória
-            df_fresh = conn.read(worksheet="Escalacao", ttl=0) # Puxa tudo de novo
+            st.cache_data.clear() 
+            df_fresh = conn.read(worksheet="Escalacao", ttl=0) 
             
             sup_col_f = next((col for col in df_fresh.columns if 'email' in str(col).lower() and 'suplente' in str(col).lower()), None)
             ori_col_f = next((col for col in df_fresh.columns if 'email' in str(col).lower() and 'orientador' in str(col).lower()), None)
@@ -152,7 +151,6 @@ tem_papel_sup = checar(email_user, c_sup_email)
 tem_papel_banca = tem_papel_av1 or tem_papel_av2 or tem_papel_sup
 
 if "perfil_ativo" not in st.session_state:
-    # Lógica que prioriza Banca no Perfil Duplo
     if tem_papel_banca:
         st.session_state.perfil_ativo = "Banca"
     else:
@@ -271,7 +269,7 @@ if not df_escalacao.empty:
         if c_av1_email:
             cond_banca |= (df_escalacao[c_av1_email].astype(str).str.lower() == email_user)
         if c_av2_email:
-            cond_banca |= (df_escalacao[c_av2_email].astype(str).str.lower() == email_user)
+            cond_banca |= (df_escalacao[df_escalacao[c_av2_email].astype(str).str.lower() == email_user])
         if c_sup_email:
             cond_banca |= (df_escalacao[c_sup_email].astype(str).str.lower() == email_user)
             
@@ -416,7 +414,7 @@ else:
                     if st.form_submit_button("🚀 ENVIAR PARECER E CONCLUIR BANCA"):
                         if resposta_aptidao == "":
                             st.error("Por favor, selecione se o grupo está APTO ou INAPTO.")
-                        elif assinatura_texto == "":
+                        elif signature_texto == "":
                             st.error("Por favor, digite seu nome no campo de assinatura para validar o documento.")
                         else:
                             with st.spinner("Gravando parecer de aptidão na planilha..."):
@@ -485,7 +483,7 @@ else:
                             "Discente - Pontualidade e Compromisso": (3, "Pontualidade é mantida consistentemente, demonstrando compromisso com os prazos."),
                             "Responsabilidade com a Aprendizagem": (3, "Responsabilidade evidente em buscar ativamente oportunidades de aprendizado e de aprimoramento."),
                             "Projeto - Formulação do Problema e Justificativa": (5, "Problema de pesquisa é excepcionalmente formulado, e a justificativa é altamente persuasiva, atualizada e relevante."),
-                            "Projeto - Objetivos e Hipóteses": (4, "Objetivos são bem formulados e alinhados, e as hipóteses são pertinentes e testáveis."),
+                            "Projeto - Objetivos e Hipóteses": (4, "Objetivos são bem formulados and alinhados, e as hipóteses são pertinentes e testáveis."),
                             "Projeto - Revisão de Literatura": (4, "Revisão de literatura é abrangente, crítica e identifica claramente a relevância do estudo na literatura existente."),
                             "Projeto - Metodologia e ABNT": (4, "Metodologia é detalhada e abrangente, proporcionando uma compreensão completa; projeto formatado conforme ABNT."),
                             "Projeto - Considerações Éticas e Viabilidade": (3, "Considerações éticas são discutidas de maneira apropriada, e a viabilidade do estudo é abordada.")
@@ -499,7 +497,21 @@ else:
                             "Apresentação Oral - Clareza e Domínio": (10, "Domínio conceitual do conteúdo exposto, postura, uso do tempo regulamentar e clareza na defesa oral."),
                             "Coerência - Estrutura Geral do Projeto": (10, "Lógica interna do manuscrito, alinhamento fluido entre a justificativa, os objetivos e o método.")
                         }
-                    elif "TCC II" in turma_bruta or "TCC 2" in turma_bruta or "MCM V" in turma_bruta or "MCM 5" in turma_bruta:
+                    elif "MCM V" in turma_bruta or "MCM 5" in turma_bruta:
+                        # BLOCO EXCLUSIVO: Ajustado para somar 100 pontos para a Banca Examinadora
+                        rubrica = {
+                            "Tema/Resumo": (5, "Qualidade técnica do resumo e aderência ao tema."),
+                            "Introdução": (10, "Fundamentação teórica sólida e revisão."),
+                            "Metodologia": (15, "Execução real do método proposto."),
+                            "Resultados": (15, "Apresentação clara dos dados obtidos."),
+                            "Discussão": (20, "Capacidade crítica de comparar resultados."),
+                            "Referências": (5, "Rigor técnico nas citações e bibliografia."),
+                            "Apresentação Oral": (15, "Segurança na defesa dos resultados."),
+                            "Coerência": (10, "União lógica de todas as partes do trabalho."),
+                            "Qualidade Visual": (4, "Profissionalismo na apresentação visual."),
+                            "Tempo": (1, "Intervalo de 15 a 20 minutos de apresentação.")
+                        }
+                    elif "TCC II" in turma_bruta or "TCC 2" in turma_bruta:
                         rubrica = {
                             "Tema/Resumo": (4, "Qualidade técnica do resumo e aderência ao tema."),
                             "Introdução": (5, "Fundamentação teórica sólida e revisão."),
